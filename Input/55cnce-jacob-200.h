@@ -24,7 +24,7 @@ Note: The parameters in this file can be modified to model different planets aro
 //#define COMMENTS        "Dayside: RC test n=10; with RT time stepping N=300; New adiabat and New conv scheme" //to be printed in log file for debugging purposes
 //--------------------------------------------------------------------- 
 //MS, 2022:
-#define RadConv_Solver  1   // 0 = Guillot TP profile
+#define RadConv_Solver  0   // 0 = Guillot TP profile
                             // 1 = Radiative Convective Climate
 //- IF RadConv_Solver = 1 --------------------------------------------- 
 #define TIME_STEPPING   1   // 0 = matrix solver for RT fluxes
