@@ -1,0 +1,578 @@
+85589.gattaca-hn1
+**********************************************************************
+ExoSurfAir launched on Tue Jun 27 11:21:24 2023
+Original Author:  Renyu Hu (renyu.hu@jpl.nasa.gov)
+Version:  2023, Major RadTrans and Convection upgrades
+Edited by:  Markus Scheucher (markus.scheucher@jpl.nasa.gov)
+**********************************************************************
+
+Special Comments:  Guillot
+----------------------------------------------------------------------
+
+Input File:  jupiter-guillot.h
+Results Directory:  Results/jupiter-guillot/
+----------------------------------------------------------------------
+
+PLANETARY SETUP:
+Host Star =  Library/Star/solar0.txt
+M_planet =  1.898300e+27 kg
+Interior Temperature =  1.100000e+02 K
+Advection Factor =  0.250000
+Zenith Angle =  60.000000 (1.047100 rad)
+----------------------------------------------------------------------
+
+CLIMATE SETUP:
+Equilibrium solver using flux Jacobian with delta_Temp= 1.000000 & max step =  1.000000e-01 Temp_old
+Using Heng+2018 2-STREAM equations for anisotropic scattering and non-isothermal layers (by M.Scheucher)
+Equations 25&26 used in original penta-diagonal form (see ms_2stream.c)
+RT_FLUX_SOLVER of choice: [4] : PTRANS-I pentadiagonal solver (Askar & Karawia, 2015)
+Convective Adjustment: Dry with simple R/cp (by R.Hu)
+----------------------------------------------------------------------
+
+Set wavelength done
+Rayleigh scattering done
+Stellar radiation data is imported.
+----------------------------------------------------------------------
+
+Initial TP profile calculated:
+T[K]        P[Pa]     
+130.00      1.00e-03  
+130.00      1.29e-03  
+130.00      1.66e-03  
+130.00      2.14e-03  
+130.00      2.75e-03  
+130.01      3.55e-03  
+130.01      4.57e-03  
+130.01      5.89e-03  
+130.02      7.59e-03  
+130.02      9.77e-03  
+130.02      1.26e-02  
+130.03      1.62e-02  
+130.03      2.09e-02  
+130.04      2.69e-02  
+130.05      3.47e-02  
+130.05      4.47e-02  
+130.06      5.75e-02  
+130.07      7.41e-02  
+130.08      9.55e-02  
+130.09      1.23e-01  
+130.10      1.58e-01  
+130.11      2.04e-01  
+130.12      2.63e-01  
+130.13      3.39e-01  
+130.14      4.37e-01  
+130.15      5.62e-01  
+130.16      7.24e-01  
+130.18      9.33e-01  
+130.19      1.20e+00  
+130.20      1.55e+00  
+130.22      2.00e+00  
+130.23      2.57e+00  
+130.25      3.31e+00  
+130.26      4.27e+00  
+130.28      5.50e+00  
+130.30      7.08e+00  
+130.31      9.12e+00  
+130.33      1.17e+01  
+130.35      1.51e+01  
+130.37      1.95e+01  
+130.39      2.51e+01  
+130.41      3.24e+01  
+130.43      4.17e+01  
+130.45      5.37e+01  
+130.47      6.92e+01  
+130.49      8.91e+01  
+130.50      1.15e+02  
+130.50      1.48e+02  
+130.51      1.91e+02  
+130.52      2.45e+02  
+130.53      3.16e+02  
+130.54      4.07e+02  
+130.56      5.25e+02  
+130.58      6.76e+02  
+130.60      8.71e+02  
+130.62      1.12e+03  
+130.65      1.45e+03  
+130.68      1.86e+03  
+130.71      2.40e+03  
+130.75      3.09e+03  
+130.78      3.98e+03  
+130.82      5.13e+03  
+130.87      6.61e+03  
+130.91      8.51e+03  
+130.96      1.10e+04  
+131.01      1.41e+04  
+131.07      1.82e+04  
+131.12      2.34e+04  
+131.18      3.02e+04  
+131.25      3.89e+04  
+131.31      5.01e+04  
+131.38      6.46e+04  
+131.45      8.32e+04  
+131.50      1.07e+05  
+131.50      1.38e+05  
+131.50      1.78e+05  
+131.50      2.29e+05  
+131.50      2.95e+05  
+131.50      3.80e+05  
+131.50      4.90e+05  
+131.50      6.31e+05  
+131.50      8.13e+05  
+131.50      1.05e+06  
+131.50      1.35e+06  
+131.50      1.74e+06  
+131.50      2.24e+06  
+131.50      2.88e+06  
+131.50      3.72e+06  
+131.50      4.79e+06  
+131.50      6.17e+06  
+131.50      7.94e+06  
+131.50      1.02e+07  
+131.50      1.32e+07  
+131.50      1.70e+07  
+131.50      2.19e+07  
+131.50      2.82e+07  
+131.50      3.63e+07  
+131.50      4.68e+07  
+131.50      6.03e+07  
+131.50      7.76e+07  
+131.50      1.00e+08  
+Mid-layer TP profile:
+Height[km] P[Pa]      T[K]       Dens[mol/cm3] 
+447.7      1.14e-03   130.00     6.32e+11      
+443.3      1.46e-03   130.00     8.15e+11      
+438.8      1.88e-03   130.00     1.05e+12      
+434.3      2.43e-03   130.00     1.35e+12      
+429.8      3.13e-03   130.00     1.74e+12      
+425.4      4.03e-03   130.01     2.24e+12      
+420.9      5.19e-03   130.01     2.89e+12      
+416.4      6.68e-03   130.01     3.72e+12      
+411.9      8.61e-03   130.02     4.80e+12      
+407.5      1.11e-02   130.02     6.18e+12      
+403.0      1.43e-02   130.03     7.96e+12      
+398.5      1.84e-02   130.03     1.03e+13      
+394.0      2.37e-02   130.04     1.32e+13      
+389.6      3.05e-02   130.04     1.70e+13      
+385.1      3.94e-02   130.05     2.19e+13      
+380.6      5.07e-02   130.06     2.82e+13      
+376.1      6.53e-02   130.07     3.64e+13      
+371.6      8.41e-02   130.07     4.69e+13      
+367.2      1.08e-01   130.08     6.04e+13      
+362.7      1.40e-01   130.09     7.77e+13      
+358.2      1.80e-01   130.10     1.00e+14      
+353.7      2.32e-01   130.11     1.29e+14      
+349.3      2.99e-01   130.12     1.66e+14      
+344.8      3.85e-01   130.13     2.14e+14      
+340.3      4.95e-01   130.15     2.76e+14      
+335.8      6.38e-01   130.16     3.55e+14      
+331.3      8.22e-01   130.17     4.58e+14      
+326.8      1.06e+00   130.18     5.89e+14      
+322.4      1.36e+00   130.20     7.59e+14      
+317.9      1.76e+00   130.21     9.78e+14      
+313.4      2.26e+00   130.23     1.26e+15      
+308.9      2.92e+00   130.24     1.62e+15      
+304.4      3.76e+00   130.26     2.09e+15      
+300.0      4.84e+00   130.27     2.69e+15      
+295.5      6.24e+00   130.29     3.47e+15      
+291.0      8.04e+00   130.31     4.47e+15      
+286.5      1.04e+01   130.32     5.75e+15      
+282.0      1.33e+01   130.34     7.41e+15      
+277.5      1.72e+01   130.36     9.54e+15      
+273.0      2.21e+01   130.38     1.23e+16      
+268.5      2.85e+01   130.40     1.58e+16      
+264.1      3.67e+01   130.42     2.04e+16      
+259.6      4.73e+01   130.44     2.63e+16      
+255.1      6.10e+01   130.46     3.38e+16      
+250.6      7.85e+01   130.48     4.36e+16      
+246.1      1.01e+02   130.50     5.61e+16      
+241.6      1.30e+02   130.50     7.23e+16      
+237.1      1.68e+02   130.51     9.32e+16      
+232.6      2.16e+02   130.51     1.20e+17      
+228.1      2.79e+02   130.52     1.55e+17      
+223.6      3.59e+02   130.53     1.99e+17      
+219.1      4.62e+02   130.55     2.57e+17      
+214.6      5.96e+02   130.57     3.30e+17      
+210.1      7.67e+02   130.59     4.26e+17      
+205.6      9.89e+02   130.61     5.48e+17      
+201.2      1.27e+03   130.64     7.06e+17      
+196.7      1.64e+03   130.66     9.09e+17      
+192.2      2.11e+03   130.70     1.17e+18      
+187.7      2.72e+03   130.73     1.51e+18      
+183.2      3.51e+03   130.77     1.94e+18      
+178.7      4.52e+03   130.80     2.50e+18      
+174.1      5.82e+03   130.85     3.22e+18      
+169.6      7.50e+03   130.89     4.15e+18      
+165.1      9.66e+03   130.94     5.34e+18      
+160.6      1.24e+04   130.99     6.88e+18      
+156.1      1.60e+04   131.04     8.86e+18      
+151.6      2.07e+04   131.10     1.14e+19      
+147.1      2.66e+04   131.15     1.47e+19      
+142.6      3.43e+04   131.21     1.89e+19      
+138.1      4.42e+04   131.28     2.44e+19      
+133.5      5.69e+04   131.34     3.14e+19      
+129.0      7.33e+04   131.41     4.04e+19      
+124.5      9.44e+04   131.47     5.20e+19      
+120.0      1.22e+05   131.50     6.70e+19      
+115.4      1.57e+05   131.50     8.63e+19      
+110.9      2.02e+05   131.50     1.11e+20      
+106.4      2.60e+05   131.50     1.43e+20      
+101.9      3.35e+05   131.50     1.84e+20      
+97.3       4.32e+05   131.50     2.38e+20      
+92.8       5.56e+05   131.50     3.06e+20      
+88.3       7.16e+05   131.50     3.94e+20      
+83.7       9.23e+05   131.50     5.08e+20      
+79.2       1.19e+06   131.50     6.55e+20      
+74.7       1.53e+06   131.50     8.43e+20      
+70.2       1.97e+06   131.50     1.09e+21      
+65.6       2.54e+06   131.50     1.40e+21      
+61.1       3.27e+06   131.50     1.80e+21      
+56.6       4.22e+06   131.50     2.32e+21      
+52.1       5.43e+06   131.50     2.99e+21      
+47.5       7.00e+06   131.50     3.85e+21      
+43.0       9.02e+06   131.50     4.97e+21      
+38.5       1.16e+07   131.50     6.40e+21      
+34.0       1.50e+07   131.50     8.24e+21      
+29.4       1.93e+07   131.50     1.06e+22      
+24.9       2.48e+07   131.50     1.37e+22      
+20.4       3.20e+07   131.50     1.76e+22      
+15.8       4.12e+07   131.50     2.27e+22      
+11.3       5.31e+07   131.50     2.92e+22      
+6.8        6.84e+07   131.50     3.77e+22      
+2.3        8.81e+07   131.50     4.85e+22      
+The Z-T-P data is imported/calculated.
+----------------------------------------------------------------------
+
+Species list imported from: Condition/SpeciesList/species_general_CHON_exp.dat
+       H  X    3   01   0.00e+00  0.00   2  0.00   0.00e+00
+      H2  X   53   02   0.00e+00  0.00   2  0.00   0.00e+00
+       O  X    1   16   0.00e+00  0.00   2  0.00   0.00e+00
+   O(1D)  X   56   16   0.00e+00  0.00   2  0.00   0.00e+00
+      O2  X   54   32   0.00e+00  0.00   2  0.00   0.00e+00
+      O3  X    2   48   0.00e+00  0.00   2  0.00   0.00e+00
+      OH  X    4   17   0.00e+00  0.00   2  0.00   0.00e+00
+     HO2  X    5   33   0.00e+00  0.00   2  0.00   0.00e+00
+     H2O  X    7   18   0.00e+00  0.00   2  0.00   0.00e+00
+    H2O2  X    6   34   0.00e+00  0.00   2  0.00   0.00e+00
+     CO2  X   52   44   0.00e+00  0.00   2  0.00   0.00e+00
+      CO  X   20   28   0.00e+00  0.00   2  0.00   0.00e+00
+    CH2O  X   22   30   0.00e+00  0.00   2  0.00   0.00e+00
+     CHO  X   61   29   0.00e+00  0.00   2  0.00   0.00e+00
+       C  X   19   12   0.00e+00  0.00   2  0.00   0.00e+00
+      CH  X   58   13   0.00e+00  0.00   2  0.00   0.00e+00
+     CH2  X   59   14   0.00e+00  0.00   2  0.00   0.00e+00
+    CH21  X   80   14   0.00e+00  0.00   2  0.00   0.00e+00
+     CH3  X   60   15   0.00e+00  0.00   2  0.00   0.00e+00
+     CH4  X   21   16   0.00e+00  0.00   2  0.00   0.00e+00
+    CH3O  X   62   31   0.00e+00  0.00   2  0.00   0.00e+00
+    CH4O  X   24   32   0.00e+00  0.00   2  0.00   0.00e+00
+    CHO2  X   63   45   0.00e+00  0.00   2  0.00   0.00e+00
+   CH2O2  X   23   46   0.00e+00  0.00   2  0.00   0.00e+00
+   CH3O2  X   71   47   0.00e+00  0.00   2  0.00   0.00e+00
+   CH4O2  X   25   48   0.00e+00  0.00   2  0.00   0.00e+00
+      C2  X   26   24   0.00e+00  0.00   2  0.00   0.00e+00
+     C2H  X   64   25   0.00e+00  0.00   2  0.00   0.00e+00
+    C2H2  X   27   26   0.00e+00  0.00   2  0.00   0.00e+00
+    C2H3  X   28   27   0.00e+00  0.00   2  0.00   0.00e+00
+    C2H4  X   29   28   0.00e+00  0.00   2  0.00   0.00e+00
+    C2H5  X   30   29   0.00e+00  0.00   2  0.00   0.00e+00
+    C2H6  X   31   30   0.00e+00  0.00   2  0.00   0.00e+00
+    C2HO  X   32   41   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H2O  X   33   42   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H3O  X   34   43   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H4O  X   35   44   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H5O  X   36   45   0.00e+00  0.00   2  0.00   0.00e+00
+      N2  X   55   28   0.00e+00  0.00   2  0.00   0.00e+00
+       N  X    8   14   0.00e+00  0.00   2  0.00   0.00e+00
+     NH3  X    9   17   0.00e+00  0.00   2  0.00   0.00e+00
+     NH2  X   10   16   0.00e+00  0.00   2  0.00   0.00e+00
+      NH  X   57   15   0.00e+00  0.00   2  0.00   0.00e+00
+     N2O  X   11   44   0.00e+00  0.00   2  0.00   0.00e+00
+      NO  X   12   30   0.00e+00  0.00   2  0.00   0.00e+00
+     NO2  X   13   46   0.00e+00  0.00   2  0.00   0.00e+00
+     NO3  X   14   62   0.00e+00  0.00   2  0.00   0.00e+00
+    N2O5  X   15  108   0.00e+00  0.00   2  0.00   0.00e+00
+     HNO  X   16   31   0.00e+00  0.00   2  0.00   0.00e+00
+    HNO2  X   17   47   0.00e+00  0.00   2  0.00   0.00e+00
+    HNO3  X   18   63   0.00e+00  0.00   2  0.00   0.00e+00
+    HNO4  X   70   79   0.00e+00  0.00   2  0.00   0.00e+00
+     HCN  X   37   27   0.00e+00  0.00   2  0.00   0.00e+00
+      CN  X   38   26   0.00e+00  0.00   2  0.00   0.00e+00
+     CNO  X   39   42   0.00e+00  0.00   2  0.00   0.00e+00
+    HCNO  X   72   43   0.00e+00  0.00   2  0.00   0.00e+00
+  CH3NO2  X   65   61   0.00e+00  0.00   2  0.00   0.00e+00
+  CH3NO3  X   66   77   0.00e+00  0.00   2  0.00   0.00e+00
+    CH5N  X  109   31   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H2N  X   67   40   0.00e+00  0.00   2  0.00   0.00e+00
+   C2H5N  X  110   43   0.00e+00  0.00   2  0.00   0.00e+00
+    N2H2  X  106   30   0.00e+00  0.00   2  0.00   0.00e+00
+    N2H3  X  107   31   0.00e+00  0.00   2  0.00   0.00e+00
+    N2H4  X  108   32   0.00e+00  0.00   2  0.00   0.00e+00
+The species list is imported.
+Number of species in model: 64
+Number of species to be solved in full: 64
+In which the number of aerosol species is: 0
+Number of species to be solved in photochemical equil: 0
+Number of species assumed to be constant: 0
+----------------------------------------------------------------------
+
+----------------------------------------------------------------------
+
+The reaction lists are imported.
+Number of bi-molecular reactions: 241
+Number of tri-molecular reactions: 31
+Number of photolysis: 34
+Number of thermo-dissociations: 15
+----------------------------------------------------------------------
+
+The O2 Cross section and quantum yield data are imported.
+The O2 Cross section and quantum yield data are imported.
+The O3 Cross section and quantum yield data are imported.
+The O3 Cross section and quantum yield data are imported.
+The HO2 Cross section and quantum yield data are imported.
+The H2O Cross section and quantum yield data are imported.
+The H2O2 Cross section and quantum yield data are imported.
+The CH2O Cross section and quantum yield data are imported.
+The CH2O Cross section and quantum yield data are imported.
+The C2H4O Cross section and quantum yield data are imported.
+The C2H4O Cross section and quantum yield data are imported.
+The CH4O2 Cross section and quantum yield data are imported.
+The CH2O2 Cross section and quantum yield data are imported.
+The CH2O2 Cross section and quantum yield data are imported.
+The CH2O2 Cross section and quantum yield data are imported.
+The CH4 Cross section and quantum yield data are imported.
+The CH4 Cross section and quantum yield data are imported.
+The CH4 Cross section and quantum yield data are imported.
+The CO Cross section and quantum yield data are imported.
+The CO2 Cross section and quantum yield data are imported.
+The CO2 Cross section and quantum yield data are imported.
+The H2 Cross section and quantum yield data are imported.
+The CH4O Cross section and quantum yield data are imported.
+The C2H2 Cross section and quantum yield data are imported.
+The C2H3 Cross section and quantum yield data are imported.
+The C2H4 Cross section and quantum yield data are imported.
+The C2H4 Cross section and quantum yield data are imported.
+The C2H4 Cross section and quantum yield data are imported.
+The C2H5 Cross section and quantum yield data are imported.
+The C2H6 Cross section and quantum yield data are imported.
+The C2H6 Cross section and quantum yield data are imported.
+The C2H6 Cross section and quantum yield data are imported.
+The C2H6 Cross section and quantum yield data are imported.
+The C2H6 Cross section and quantum yield data are imported.
+Cross sections of the aerosol are imported.
+Prepare to get atom abundance from	Results/jupiter-guillot/atom.dat
+Prepare to get initial molecular concentration from	Results/jupiter-guillot//ConcentrationSTD.dat
+Variable initialization successful
+Mean Molecular Mass at layer  100 is 2.35
+Helium mixing ratio at layer  100 is 1.63e-01
+Library/Opacity/H2_FullT_LowRes/H2-H2_CIA.dat
+Library/Opacity/H2_FullT_LowRes/H2-He_CIA.dat
+Library/Opacity/H2_FullT_LowRes/H2-H_CIA.dat
+Library/Opacity/H2_FullT_LowRes/N2-N2_CIA.dat
+Library/Opacity/H2_FullT_LowRes/N2-H2_CIA.dat
+Library/Opacity/H2_FullT_LowRes/CO2-CO2_CIA.dat
+CIA mean opacity in the infrared calculated!
+Prepare to print out thermal STD file to	Results/jupiter-guillot//ConcentrationSTD_T.dat
+Prepare to print out new temperature to	Results/jupiter-guillot//NewTemperature.dat
+Tint is 110.000000
+The mean opacity at altitude 2.263439 km is 3.766469e-24 inf 0.000000
+The mean opacity at altitude 6.790317 km is 3.019050e-24 inf 0.000000
+The mean opacity at altitude 11.317196 km is 2.437001e-24 inf 0.000000
+The mean opacity at altitude 15.844074 km is 1.983354e-24 inf 0.000000
+The mean opacity at altitude 20.370952 km is 1.629404e-24 inf 0.000000
+The mean opacity at altitude 24.897831 km is 1.352866e-24 inf 0.000000
+The mean opacity at altitude 29.424709 km is 1.136418e-24 inf 0.000000
+The mean opacity at altitude 33.951587 km is 9.666201e-25 inf 0.000000
+The mean opacity at altitude 38.478466 km is 8.330274e-25 inf 0.000000
+The mean opacity at altitude 43.005344 km is 7.308568e-25 inf 0.000000
+The mean opacity at altitude 47.532222 km is 6.552785e-25 inf 0.000000
+The mean opacity at altitude 52.059101 km is 5.966167e-25 inf 0.000000
+The mean opacity at altitude 56.585979 km is 5.510688e-25 inf 0.000000
+The mean opacity at altitude 61.112857 km is 5.157100e-25 inf 0.000000
+The mean opacity at altitude 65.639736 km is 4.882207e-25 inf 0.000000
+The mean opacity at altitude 70.166614 km is 4.668553e-25 inf 0.000000
+The mean opacity at altitude 74.693492 km is 4.502373e-25 inf 0.000000
+The mean opacity at altitude 79.220371 km is 4.373163e-25 inf 0.000000
+The mean opacity at altitude 83.747249 km is 4.266388e-25 inf 0.000000
+The mean opacity at altitude 88.274127 km is 4.167823e-25 inf 0.000000
+The mean opacity at altitude 92.801006 km is 4.086777e-25 inf 0.000000
+The mean opacity at altitude 97.327884 km is 4.018850e-25 inf 0.000000
+The mean opacity at altitude 101.854762 km is 3.961740e-25 inf 0.000000
+The mean opacity at altitude 106.381641 km is 3.912511e-25 inf 0.000000
+The mean opacity at altitude 110.908519 km is 3.869498e-25 inf 0.000000
+The mean opacity at altitude 115.435397 km is 3.831477e-25 inf 0.000000
+The mean opacity at altitude 119.962276 km is 3.797414e-25 inf 0.000000
+The mean opacity at altitude 124.488701 km is 3.746753e-25 6.264087e-23 0.005981
+The mean opacity at altitude 129.013618 km is 3.632612e-25 inf 0.000000
+The mean opacity at altitude 133.536297 km is 3.520124e-25 6.228696e-23 0.005651
+The mean opacity at altitude 138.056658 km is 3.409037e-25 6.184815e-23 0.005512
+The mean opacity at altitude 142.574793 km is 3.299002e-25 6.129822e-23 0.005382
+The mean opacity at altitude 147.090795 km is 3.189793e-25 6.064950e-23 0.005259
+The mean opacity at altitude 151.604756 km is 3.080975e-25 5.991450e-23 0.005142
+The mean opacity at altitude 156.116769 km is 2.972990e-25 5.908643e-23 0.005032
+The mean opacity at altitude 160.626926 km is 2.865105e-25 5.815845e-23 0.004926
+The mean opacity at altitude 165.135321 km is 2.751535e-25 5.695850e-23 0.004831
+The mean opacity at altitude 169.642045 km is 2.601468e-25 5.520946e-23 0.004712
+The mean opacity at altitude 174.147192 km is 2.451919e-25 5.311882e-23 0.004616
+The mean opacity at altitude 178.650853 km is 2.301857e-25 5.072344e-23 0.004538
+The mean opacity at altitude 183.153122 km is 2.152177e-25 4.805930e-23 0.004478
+The mean opacity at altitude 187.654090 km is 2.002567e-25 4.510192e-23 0.004440
+The mean opacity at altitude 192.153851 km is 1.852655e-25 4.179968e-23 0.004432
+The mean opacity at altitude 196.652497 km is 1.703222e-25 3.804514e-23 0.004477
+The mean opacity at altitude 201.150120 km is 1.553606e-25 3.352528e-23 0.004634
+The mean opacity at altitude 205.646814 km is 1.411381e-25 2.361004e-23 0.005978
+The mean opacity at altitude 210.142670 km is 1.426324e-25 2.250302e-23 0.006338
+The mean opacity at altitude 214.637782 km is 1.441072e-25 2.132846e-23 0.006757
+The mean opacity at altitude 219.132241 km is 1.455863e-25 2.010026e-23 0.007243
+The mean opacity at altitude 223.626141 km is 1.470751e-25 1.881581e-23 0.007817
+The mean opacity at altitude 228.119574 km is 1.485749e-25 1.746469e-23 0.008507
+The mean opacity at altitude 232.612632 km is 1.500671e-25 1.603229e-23 0.009360
+The mean opacity at altitude 237.105408 km is 1.515542e-25 1.448255e-23 0.010465
+The mean opacity at altitude 241.597995 km is 1.530431e-25 1.274782e-23 0.012005
+The mean opacity at altitude 246.090398 km is 1.545368e-25 1.015984e-23 0.015211
+The mean opacity at altitude 250.582412 km is 1.557774e-25 8.397729e-24 0.018550
+The mean opacity at altitude 255.073786 km is 1.569879e-25 7.690808e-24 0.020412
+The mean opacity at altitude 259.564435 km is 1.581970e-25 6.982843e-24 0.022655
+The mean opacity at altitude 264.054375 km is 1.594015e-25 6.273154e-24 0.025410
+The mean opacity at altitude 268.543625 km is 1.606034e-25 5.562744e-24 0.028871
+The mean opacity at altitude 273.032199 km is 1.618118e-25 4.843599e-24 0.033407
+The mean opacity at altitude 277.520115 km is 1.630269e-25 4.119938e-24 0.039570
+The mean opacity at altitude 282.007390 km is 1.642397e-25 3.384790e-24 0.048523
+The mean opacity at altitude 286.494040 km is 1.654610e-25 2.612367e-24 0.063338
+The mean opacity at altitude 290.980082 km is 1.657352e-25 2.367668e-24 0.069999
+The mean opacity at altitude 295.465532 km is 1.658710e-25 2.229720e-24 0.074391
+The mean opacity at altitude 299.950408 km is 1.660188e-25 2.087534e-24 0.079529
+The mean opacity at altitude 304.434725 km is 1.661605e-25 1.944473e-24 0.085453
+The mean opacity at altitude 308.918501 km is 1.662812e-25 1.799645e-24 0.092397
+The mean opacity at altitude 313.401752 km is 1.664315e-25 1.654568e-24 0.100589
+The mean opacity at altitude 317.884495 km is 1.665547e-25 1.504150e-24 0.110730
+The mean opacity at altitude 322.366746 km is 1.666930e-25 1.350096e-24 0.123468
+The mean opacity at altitude 326.848523 km is 1.668299e-25 1.186117e-24 0.140652
+The mean opacity at altitude 331.329841 km is 1.668489e-25 1.130828e-24 0.147546
+The mean opacity at altitude 335.810718 km is 1.668818e-25 1.112100e-24 0.150060
+The mean opacity at altitude 340.291170 km is 1.668639e-25 1.092275e-24 0.152767
+The mean opacity at altitude 344.771213 km is 1.668815e-25 1.072400e-24 0.155615
+The mean opacity at altitude 349.250866 km is 1.668899e-25 1.049110e-24 0.159078
+The mean opacity at altitude 353.730143 km is 1.669016e-25 1.024972e-24 0.162835
+The mean opacity at altitude 358.209062 km is 1.669004e-25 9.982279e-25 0.167197
+The mean opacity at altitude 362.687639 km is 1.669032e-25 9.674143e-25 0.172525
+The mean opacity at altitude 367.165892 km is 1.669030e-25 9.287654e-25 0.179704
+The mean opacity at altitude 371.643836 km is 1.669076e-25 9.138565e-25 0.182641
+The mean opacity at altitude 376.121489 km is 1.669114e-25 9.138091e-25 0.182655
+The mean opacity at altitude 380.598867 km is 1.668805e-25 9.135662e-25 0.182669
+The mean opacity at altitude 385.075986 km is 1.668994e-25 9.136168e-25 0.182680
+The mean opacity at altitude 389.552864 km is 1.667982e-25 9.129100e-25 0.182710
+The mean opacity at altitude 394.029517 km is 1.569444e-25 8.477529e-25 0.185130
+The mean opacity at altitude 398.505962 km is 1.423976e-25 7.516263e-25 0.189453
+The mean opacity at altitude 402.982215 km is 1.415490e-25 7.459929e-25 0.189746
+The mean opacity at altitude 407.458293 km is 1.415033e-25 7.456662e-25 0.189768
+The mean opacity at altitude 411.934213 km is 1.413358e-25 7.447794e-25 0.189769
+The mean opacity at altitude 416.409991 km is 8.365742e-26 4.541768e-25 0.184196
+The mean opacity at altitude 420.885645 km is 3.852401e-26 2.313679e-25 0.166505
+The mean opacity at altitude 425.361190 km is 3.804680e-26 2.296860e-25 0.165647
+The mean opacity at altitude 429.836643 km is 3.841728e-26 inf 0.000000
+The mean opacity at altitude 434.312021 km is 3.862669e-26 2.331572e-25 0.165668
+The mean opacity at altitude 438.787341 km is 3.871239e-26 2.336648e-25 0.165675
+The mean opacity at altitude 443.262620 km is 3.875437e-26 2.339137e-25 0.165678
+The mean opacity at altitude 447.737873 km is 3.879461e-26 2.341521e-25 0.165681
+The gamma factor is 0.000000
+The optical depth is 1.288250e-03 3.709329e-12
+The optical depth is 1.659587e-03 8.482993e-12
+The optical depth is 2.137962e-03 1.462614e-11
+The optical depth is 2.754229e-03 2.252286e-11
+The optical depth is 3.548134e-03 inf
+The optical depth is 4.570882e-03 inf
+The optical depth is 5.888437e-03 inf
+The optical depth is 7.585776e-03 inf
+The optical depth is 9.772372e-03 inf
+The optical depth is 1.258925e-02 inf
+The optical depth is 1.621810e-02 inf
+The optical depth is 2.089296e-02 inf
+The optical depth is 2.691535e-02 inf
+The optical depth is 3.467369e-02 inf
+The optical depth is 4.466836e-02 inf
+The optical depth is 5.754399e-02 inf
+The optical depth is 7.413102e-02 inf
+The optical depth is 9.549926e-02 inf
+The optical depth is 1.230269e-01 inf
+The optical depth is 1.584893e-01 inf
+The optical depth is 2.041738e-01 inf
+The optical depth is 2.630268e-01 inf
+The optical depth is 3.388442e-01 inf
+The optical depth is 4.365158e-01 inf
+The optical depth is 5.623413e-01 inf
+The optical depth is 7.244360e-01 inf
+The optical depth is 9.332543e-01 inf
+The optical depth is 1.202264e+00 inf
+The optical depth is 1.548817e+00 inf
+The optical depth is 1.995262e+00 inf
+The optical depth is 2.570396e+00 inf
+The optical depth is 3.311311e+00 inf
+The optical depth is 4.265795e+00 inf
+The optical depth is 5.495409e+00 inf
+The optical depth is 7.079458e+00 inf
+The optical depth is 9.120108e+00 inf
+The optical depth is 1.174898e+01 inf
+The optical depth is 1.513561e+01 inf
+The optical depth is 1.949845e+01 inf
+The optical depth is 2.511886e+01 inf
+The optical depth is 3.235937e+01 inf
+The optical depth is 4.168694e+01 inf
+The optical depth is 5.370318e+01 inf
+The optical depth is 6.918310e+01 inf
+The optical depth is 8.912509e+01 inf
+The optical depth is 1.148154e+02 inf
+The optical depth is 1.479108e+02 inf
+The optical depth is 1.905461e+02 inf
+The optical depth is 2.454709e+02 inf
+The optical depth is 3.162278e+02 inf
+The optical depth is 4.073803e+02 inf
+The optical depth is 5.248075e+02 inf
+The optical depth is 6.760830e+02 inf
+The optical depth is 8.709636e+02 inf
+The optical depth is 1.122018e+03 inf
+The optical depth is 1.445440e+03 inf
+The optical depth is 1.862087e+03 inf
+The optical depth is 2.398833e+03 inf
+The optical depth is 3.090295e+03 inf
+The optical depth is 3.981072e+03 inf
+The optical depth is 5.128614e+03 inf
+The optical depth is 6.606934e+03 inf
+The optical depth is 8.511380e+03 inf
+The optical depth is 1.096478e+04 inf
+The optical depth is 1.412538e+04 inf
+The optical depth is 1.819701e+04 inf
+The optical depth is 2.344229e+04 inf
+The optical depth is 3.019952e+04 inf
+The optical depth is 3.890451e+04 inf
+The optical depth is 5.011872e+04 inf
+The optical depth is 6.456542e+04 inf
+The optical depth is 8.317638e+04 inf
+The optical depth is 1.071519e+05 inf
+The optical depth is 1.380384e+05 inf
+The optical depth is 1.778279e+05 inf
+The optical depth is 2.290868e+05 inf
+The optical depth is 2.951209e+05 inf
+The optical depth is 3.801894e+05 inf
+The optical depth is 4.897788e+05 inf
+The optical depth is 6.309573e+05 inf
+The optical depth is 8.128305e+05 inf
+The optical depth is 1.047129e+06 inf
+The optical depth is 1.348963e+06 inf
+The optical depth is 1.737801e+06 inf
+The optical depth is 2.238721e+06 inf
+The optical depth is 2.884032e+06 inf
+The optical depth is 3.715352e+06 inf
+The optical depth is 4.786301e+06 inf
+The optical depth is 6.165950e+06 inf
+The optical depth is 7.943282e+06 inf
+The optical depth is 1.023293e+07 inf
+The optical depth is 1.318257e+07 inf
+The optical depth is 1.698244e+07 inf
+The optical depth is 2.187762e+07 inf
+The optical depth is 2.818383e+07 inf
+The optical depth is 3.630781e+07 inf
+The optical depth is 4.677351e+07 inf
+The optical depth is 6.025596e+07 inf
+The optical depth is 7.762471e+07 inf
+The optical depth is 1.000000e+08 inf
+GreyTemp DONE
