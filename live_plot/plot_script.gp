@@ -1,11 +1,11 @@
 set terminal png size 800,600
-set output 'live_plot/TP_profile_step_1000.png'
+set output 'live_plot/TP_profile_step_920.png'
 set logscale y
 set yrange [200:1e-8] reverse
 set xrange [800:3200]
 set xlabel 'Temperature (K)'
 set ylabel 'Pressure (Bar)'
-set title 'Temperature-Pressure Profile (Step 1000)'
+set title 'Temperature-Pressure Profile (Step 920)'
 set grid
 plot 'live_plot/temp_data.txt' using 1:3 with lines lw 3 lc rgb 'black' title 'T_{new}', \
      'live_plot/temp_data.txt' using 2:3 with lines lw 3 dt 2 lc rgb 'red' title 'T_{old}'

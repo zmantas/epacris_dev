@@ -133,7 +133,7 @@ Note: The parameters in this file can be modified to model different planets aro
 /* Input choices for the infrared opacities */
 /* Must be set to the same as the opacity code */
 
-#define CROSSHEADING		"Library/Opacity/H2_FullT_LowRes/"
+#define CROSSHEADING		"../Opacity/H2_FullT_LowRes/"
 
 #define NTEMP       20             /* Number of temperature points in grid   */
 #define TLOW        100.0           /* Temperature range in K                 */
