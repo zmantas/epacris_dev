@@ -93,7 +93,7 @@ void chemquil(double P[], double T[], int NL, int species[], int NS, double **mi
 
   chem_start(a_ij, b_j, y_start);
 	
-	printf("%s\n","start chemequil");
+	//printf("%s\n","start chemequil");
 
   /* Loop over P-T */
 
@@ -124,7 +124,7 @@ void chemquil(double P[], double T[], int NL, int species[], int NS, double **mi
 
   }
 	
-	printf("%s\n","finish looping");
+	//printf("%s\n","*** Chemical equilibrium achieved ***");
   
   	/* Return the requested mixing ratios */
  
@@ -141,7 +141,7 @@ void chemquil(double P[], double T[], int NL, int species[], int NS, double **mi
 
       }
 	
-	printf("%s\n","finish looping");
+	//printf("%s\n","*** Chemical equilibrium achieved ***");
 
 /* Clean up */
   
