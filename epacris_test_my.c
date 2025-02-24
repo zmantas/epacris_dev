@@ -122,88 +122,6 @@ double THETAREF; //previously in input file, but redefined there as 'degrees' ra
 #include "printout_std.c"
 #include "printout_std_t_exp.c"
 
-// Helper function to get the Mean and SMean arrays for a species
-void assign_mean_arrays(struct OpacityData *data) {
-    if (strcmp(data->name, "CO2") == 0) {
-        data->mean = MeanCO2;
-        data->smean = SMeanCO2;
-    } else if (strcmp(data->name, "O2") == 0) {
-        data->mean = MeanO2;
-        data->smean = SMeanO2;
-    } else if (strcmp(data->name, "H2O") == 0) {
-        data->mean = MeanH2O;
-        data->smean = SMeanH2O;
-    } else if (strcmp(data->name, "C2H2") == 0) {
-        data->mean = MeanC2H2;
-        data->smean = SMeanC2H2;
-    } else if (strcmp(data->name, "C2H4") == 0) {
-        data->mean = MeanC2H4;
-        data->smean = SMeanC2H4;
-    } else if (strcmp(data->name, "C2H6") == 0) {
-        data->mean = MeanC2H6;
-        data->smean = SMeanC2H6;
-    } else if (strcmp(data->name, "CH2O2") == 0) {
-        data->mean = MeanCH2O2;
-        data->smean = SMeanCH2O2;
-    } else if (strcmp(data->name, "CH4") == 0) {
-        data->mean = MeanCH4;
-        data->smean = SMeanCH4;
-    } else if (strcmp(data->name, "CO") == 0) {
-        data->mean = MeanCO;
-        data->smean = SMeanCO;
-    } else if (strcmp(data->name, "H2CO") == 0) {
-        data->mean = MeanH2CO;
-        data->smean = SMeanH2CO;
-    } else if (strcmp(data->name, "H2O2") == 0) {
-        data->mean = MeanH2O2;
-        data->smean = SMeanH2O2;
-    } else if (strcmp(data->name, "H2S") == 0) {
-        data->mean = MeanH2S;
-        data->smean = SMeanH2S;
-    } else if (strcmp(data->name, "HCN") == 0) {
-        data->mean = MeanHCN;
-        data->smean = SMeanHCN;
-    } else if (strcmp(data->name, "HNO3") == 0) {
-        data->mean = MeanHNO3;
-        data->smean = SMeanHNO3;
-    } else if (strcmp(data->name, "HO2") == 0) {
-        data->mean = MeanHO2;
-        data->smean = SMeanHO2;
-    } else if (strcmp(data->name, "N2O") == 0) {
-        data->mean = MeanN2O;
-        data->smean = SMeanN2O;
-    } else if (strcmp(data->name, "N2") == 0) {
-        data->mean = MeanN2;
-        data->smean = SMeanN2;
-    } else if (strcmp(data->name, "NH3") == 0) {
-        data->mean = MeanNH3;
-        data->smean = SMeanNH3;
-    } else if (strcmp(data->name, "NO2") == 0) {
-        data->mean = MeanNO2;
-        data->smean = SMeanNO2;
-    } else if (strcmp(data->name, "NO") == 0) {
-        data->mean = MeanNO;
-        data->smean = SMeanNO;
-    } else if (strcmp(data->name, "O3") == 0) {
-        data->mean = MeanO3;
-        data->smean = SMeanO3;
-    } else if (strcmp(data->name, "OCS") == 0) {
-        data->mean = MeanOCS;
-        data->smean = SMeanOCS;
-    } else if (strcmp(data->name, "OH") == 0) {
-        data->mean = MeanOH;
-        data->smean = SMeanOH;
-    } else if (strcmp(data->name, "SO2") == 0) {
-        data->mean = MeanSO2;
-        data->smean = SMeanSO2;
-    } else {
-        printf("Error: Unknown species %s\n", data->name);
-        exit(1);
-    }
-}
-
-
-
 //=== START MAIN PROGRAM =================================
 //========================================================
 void main(int argc, char *argv[]) //ms2022: getting rid of warnings
@@ -993,15 +911,6 @@ printf("%s\n\n",fillmi);
     */
 
 
-    // struct OpacityData opac_data[NUM_OPAC_SPECIES];
-
-    // for (int i = 0; i < NUM_OPAC_SPECIES; i++) {
-    //     strcpy(opac_data[i].name, OPAC_SPECIES_NAMES[i]);
-    //     opac_data[i].opac = dmatrix(1, zbin, 0, NLAMBDA-1);
-    //     //opac_data[i].mean = dvector(1, NLAMBDA-1);
-    //     //opac_data[i].smean = dvector(1, NLAMBDA-1);
-    // }
-
     printf("Reading CIA opacities\n");
     readcia();
     planckmeanCIA();
@@ -1030,66 +939,42 @@ printf("%s\n\n",fillmi);
 
     // Allocate and read species
     struct OpacityData *opac_data = malloc(num_species * sizeof(struct OpacityData));
+    printf("Allocated memory for %d species\n", num_species);
 
-
-    
-    // for (int i = 0; i < num_species; i++) {
-    //     if (fgets(line, sizeof(line), fp_opac)) {
-    //         // Remove newline if present
-    //         line[strcspn(line, "\n")] = 0;
-    //         strcpy(opac_data[i].name, line);
-    //         opac_data[i].opac = dmatrix(1, zbin, 0, NLAMBDA-1);
-    //         opac_data[i].mean = dvector(1, NLAMBDA-1);
-    //         opac_data[i].smean = dvector(1, NLAMBDA-1);
-    //     }
-    // }
     for (int i = 0; i < num_species; i++) {
         if (fgets(line, sizeof(line), fp_opac)) {
             // Remove newline if present
             line[strcspn(line, "\n")] = 0;
             strcpy(opac_data[i].name, line);
-            // Assign the corresponding Mean and SMean arrays
-            assign_mean_arrays(&opac_data[i]);
-            
-            // Allocate the opacity matrix
             opac_data[i].opac = dmatrix(1, zbin, 0, NLAMBDA-1);
+            opac_data[i].mean = dvector(1, NLAMBDA-1);
+            opac_data[i].smean = dvector(1, NLAMBDA-1);
             printf("Allocated memory for species %d: %s\n", i, opac_data[i].name);
         }
     }
-  
+
     fclose(fp_opac);
 
-    // for (int i = 0; i < num_species; i++) {
-    //     // Debug prints
-    //     printf("Processing species %d: %s\n", i, opac_data[i].name);
-    //     // Remove any newline characters from species name
-    //     opac_data[i].name[strcspn(opac_data[i].name, "\n\r")] = 0;
-    //     // Build filename step by step with debug prints
-    //     strcpy(crossfile, CROSSHEADING);
-    //     strcat(crossfile, "opac");
-    //     strcat(crossfile, opac_data[i].name);
-    //     strcat(crossfile, ".dat");
-    //     //printf("Reading species: %s\n", crossfile);
-        
-    //     // Check if file exists before trying to read it
-    //     if (access(crossfile, F_OK) == -1) {
-    //         printf("Error: Cross section file does not exist: %s\n", crossfile);
-    //         exit(1);
-    //     }
-
-    // When reading opacities:
+    // Process each species
     for (int i = 0; i < num_species; i++) {
-        printf("Processing species %d: %s\n", i, opac_data[i].name);
+        printf("Processing opacity for species %d: %s\n", i, opac_data[i].name);
+        
+        char crossfile[1024];
         strcpy(crossfile, CROSSHEADING);
         strcat(crossfile, "opac");
         strcat(crossfile, opac_data[i].name);
         strcat(crossfile, ".dat");
         
+        printf("Reading cross section file: %s\n", crossfile);
         readcross(crossfile, opac_data[i].opac);
+        printf("Calculating Planck mean for species %s\n", opac_data[i].name);
         planckmean(opac_data[i].mean, opac_data[i].smean, opac_data[i].opac);
     }
 
-    printf("Main opacities read!\n");
+    printf("All opacities processed successfully\n");
+
+    // Before starting climate calculations
+    printf("Starting climate calculations with %d opacity species\n", num_species);
 
     // strcpy(crossfile,CROSSHEADING);
     // strcat(crossfile,"opacC2H2.dat");
@@ -1355,6 +1240,9 @@ printf("%s\n\n",fillmi);
         }
         
         /* Update Opacities */
+
+        printf("%s\n", "Updating Opacities!!!");
+
         readcia();
         planckmeanCIA();
         printf("CIA mean opacity in the infrared calculated!\n");
@@ -1515,17 +1403,11 @@ printf("%s\n\n",fillmi);
     //     free_dmatrix(opac_data[i].opac, 1, zbin, 0, NLAMBDA-1);
     // }
 
-    // // free opacity memory
-    // for (int i = 0; i < num_species; i++) {
-    //     free_dmatrix(opac_data[i].opac, 1, zbin, 0, NLAMBDA-1);
-    //     free_dvector(opac_data[i].mean, 1, NLAMBDA-1);
-    //     free_dvector(opac_data[i].smean, 1, NLAMBDA-1);
-    // }
-    // free(opac_data);
-
-    // When cleaning up:
+    // free opacity memory
     for (int i = 0; i < num_species; i++) {
         free_dmatrix(opac_data[i].opac, 1, zbin, 0, NLAMBDA-1);
+        free_dvector(opac_data[i].mean, 1, NLAMBDA-1);
+        free_dvector(opac_data[i].smean, 1, NLAMBDA-1);
     }
     free(opac_data);
 

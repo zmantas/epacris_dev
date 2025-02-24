@@ -9,16 +9,17 @@ Note: The parameters in this file can be modified to model different planets aro
 #define _PLANET_H_
 
 //--------------------------------------------------------------------- 
-#define IN_FILE_NAME    "55cnce-jacob.h"
+#define IN_FILE_NAME    "55cnce-jacob-200_my.h"
 //---------------------------------------------------------------------
-#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
+//#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
+#define OUT_DIR         "Results/55cnce/helios_benchmark/"
 //#define OUT_DIR         "Results/toi270d-valid2-Texp8/"
 //#define OUT_DIR         "Results/toi270d-valid3-lowTiso/"
 //#define OUT_DIR         "Results/toi270d-valid4-highTiso/"
 //#define OUT_DIR         "Results/toi270d-valid5-1DTERRA/"
 //#define OUT_DIR         "Results/toi270d-valid6-Tiso2k/"
 //---------------------------------------------------------------------
-#define COMMENTS        "RC-loop validation"
+#define COMMENTS        "benchamark_vs_helios_55cnce"
 //#define COMMENTS        "Time Stepping HELIOS, init Guillot; Tint=100K" //to be printed in log file for debugging purposes
 //#define COMMENTS        "Dayside: RC test n=10; with RT time stepping N=300; old adiabat and conv scheme" //to be printed in log file for debugging purposes
 //#define COMMENTS        "Dayside: RC test n=10; with RT time stepping N=300; New adiabat and New conv scheme" //to be printed in log file for debugging purposes
@@ -27,7 +28,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define RadConv_Solver  1   // 0 = Guillot TP profile
                             // 1 = Radiative Convective Climate
 //- IF RadConv_Solver = 1 --------------------------------------------- 
-#define TIME_STEPPING   0   // 0 = matrix solver for RT fluxes
+#define TIME_STEPPING   1   // 0 = matrix solver for RT fluxes
                             // 1 = time stepping for RT fluxes
 #define TS_SCHEME       1   // 0 = testing
                             // 1 = HELIOS scheme (code but not publication)
@@ -54,10 +55,10 @@ Note: The parameters in this file can be modified to model different planets aro
 			4: Import from results of previous calculations in the standard form (TP import only for rad) */
 
 /* Iteration Conditions */
-#define NMAX        10       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     3       /* Maximum Radiative - Convective Iterations */
-#define NMAX_RT     1.0e+3  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      1.0E+3  /*RT steps between Convective adjustments after initial RT equilibrium */
+#define NMAX        1       /* Maximum Climate - Chemistry Iterations */
+#define NMAX_RC     1       /* Maximum Radiative - Convective Iterations */
+#define NMAX_RT     2000  /* Maximum Radiative Transfer Iterations */
+#define NRT_RC      2000  /*RT steps between Convective adjustments after initial RT equilibrium */
 
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)
@@ -74,6 +75,8 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Star spectrum */
 #define STAR_SPEC   "Library/Star/55cnc.txt"
+#define STAR_RADIUS 0.98 // Solar rad
+#define STAR_TEMP   5214//     /* Star temperature at surface (old version at 1 AU) */
 
 /* Atmospheric Properties */
 #define RefIdxType  0	/* Type of Refractive Index: 0=Air, 1=CO2, 2=He, 3=N2, 4=NH3, 5=CH4, 6=H2, 7=O2, 8=CO, 9=H2O */
@@ -85,7 +88,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define PSURFAB	    0.0000		/* Planet Surface Reflectivity */
 #define PSURFEM	    1.0000		/* Planet Surface Emissivity */
 /* Initial Heat Flux */
-#define TINTSET	    100.0e+0		/* Internal Heat Temperature */
+#define TINTSET	    0.0e+0		/* Internal Heat Temperature */
 
 
 /* Set up calculation grid and temperature-pressure profile intial conditions */
@@ -100,14 +103,14 @@ Note: The parameters in this file can be modified to model different planets aro
 #define zbin        100            /*How many altitude bin?*/
 
 #define PTOP        1.0E-8       /* Pressure at the top of atmosphere in bar */
-#define TTOP        2000.0       /* Temperature at PTOP in K */
+#define TTOP        0       /* Temperature at PTOP in K  Set to 0 for automatic */
 #define TINV        0            /* set to 1 if there is a temperature inversion */
 #define PMIDDLE     1.0E-3       /* Pressure at the top of troposphere or stratosphere (if inversion) */
-#define TMIDDLE     2000.0       /* Tempeature at PMIDDLE */
+#define TMIDDLE     0       /* Tempeature at PMIDDLE Set to 0 for automatic */
 #define PSTR        1.0E-1       /* Pressure at the top of troposphere (only used if inversion) */
-#define TSTR        2000.0       /* Temperature at PSTR */
+#define TSTR        0       /* Temperature at PSTR Set to 0 for automatic */
 #define PTROP       1.0E+0       /* Pressure at the bottom of troposphere */
-#define TTROP       2000.0       /* Temperature at PTROP */
+#define TTROP       0       /* Temperature at PTROP Set to 0 for automatic */
 #define PBOTTOM     2.0E+2       /* Pressure at the bottom of atmosphere */
 
 /* Molecular Species */
@@ -124,7 +127,7 @@ Note: The parameters in this file can be modified to model different planets aro
 
 #define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) */
 #define Tol_RC      1.0E+0 /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 (satisfying any of them is ok) */
-#define Tol_FRATIO  1.0E-7  //convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4
+#define Tol_FRATIO  1.0E-5  //convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4
 
 #define R_RELAX     1.0e-1     /* relaxation factor in implicit Euler stepping of radiative balance */
 #define DT_MAX      1.0e-1     /* maximum dT change in implicit Euler stepping of radiative balance */
@@ -134,6 +137,7 @@ Note: The parameters in this file can be modified to model different planets aro
 /* Must be set to the same as the opacity code */
 
 #define CROSSHEADING		"../Opacity/H2_FullT_LowRes/"
+#define OPACITY_SPECIES_FILE "Input/opacity_list/test_opacities.dat"
 
 #define NTEMP       20             /* Number of temperature points in grid   */
 #define TLOW        100.0           /* Temperature range in K                 */
@@ -163,7 +167,6 @@ Note: The parameters in this file can be modified to model different planets aro
 
 
 /* All following parameters are rarely used, set to the default values */
-#define STAR_TEMP   157.18//GREY ONLY     /* Irradiance Temperature at 1 AU */
 #define FaintSun    1.0				/* Faint early Sun factor */
 #define OUT_FILE1   "AuxillaryOut/Conx.dat"
 #define OUT_FILE2   "AuxillaryOut/Conf.dat"
