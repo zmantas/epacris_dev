@@ -28,13 +28,15 @@ char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
 //#include "Input/k218b-time.h"
 //#include "Input/k218b-jacob.h"
 //
-#include "Input/55cnce-jacob-200.h"
+#include "Input/55cnce-jacob-200_my.h"
 
 #include "constant.h"
 #include "ms_functions.h" //ms2021
 #include "routine.h"
 #include "global_temp.h"
 #include "nrutil.h"
+#include <time.h>
+
 
 double TAUdoub[2*zbin+1], Tdoub[2*zbin+1], Pdoub[2*zbin+1], MMdoub[2*zbin+1], zdoub[2*zbin+1]; //double grid for non-isothermal layers: all bottom-up!!
 double meanmolecular[zbin+1];
@@ -84,6 +86,9 @@ char fillst[] = "***************************************************************
 char fillpl[] = "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++";
 */
 //end edits
+
+double new_ttop;
+
 double rt_drfluxmax_init;
 int RTstepcount;
 double THETAREF; //previously in input file, but redefined there as 'degrees' rather than radian
@@ -113,8 +118,8 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 {
 //========================================================
 //========================================================
-    double time,t_passed,t2_passed;
-    struct timespec tstart,tend;
+    //double time,t_passed,t2_passed;
+    //struct timespec tstart,tend;
     //clock_gettime(CLOCK_REALTIME, &tstart);
     //clock_gettime(CLOCK_REALTIME, &tend);
     //t_passed = ((double)tend.tv_sec*1e9 + tend.tv_nsec) - ((double)tstart.tv_sec*1e9 + tstart.tv_nsec);
@@ -142,10 +147,10 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 
     printf("%s\n", "PLANETARY SETUP:");
     printf("%s %s\n", "Host Star = ", STAR_SPEC);
-    printf("%s %e %s\n", "M_planet = ", MASS_PLANET, "kg" );
-    printf("%s %e %s\n", "Interior Temperature = ", TINTSET, "K" );
-    printf("%s %f\n", "Advection Factor = ", FADV);
-    printf("%s %f %s%f%s\n", "Zenith Angle = ", THETAANGLE, "(",THETAREF," rad)");
+    printf("%s %.3f %s\n", "M_planet = ", MASS_PLANET/5.972e24, "M_Earth" );
+    printf("%s %.2f %s\n", "Interior Temperature = ", TINTSET, "K" );
+    printf("%s %.2f\n", "Advection Factor = ", FADV);
+    printf("%s %.2f %s%.3f%s\n", "Zenith Angle = ", THETAANGLE, "(",THETAREF," rad)");
 
     printf("%s\n\n",fillmi);
     
@@ -191,6 +196,7 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
       GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET; /* Planet Surface Gravity Acceleration, in SI */	
 	
 	/*Set the wavelength for calculation*/
+    // Potential for optimization, to make the wl grid more efficient without loosing accuracy.
 	double dlambda, start, interval, lam[NLAMBDA];
 	start = log10(LAMBDALOW);
 	interval = log10(LAMBDAHIGH) - log10(LAMBDALOW);
@@ -201,7 +207,7 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
                 /*markus2021*/
                 //if (i==4530 || i==4531) printf("%s\t%i\t%s%f\n","wavelength #",i,"= ",wavelength[i]);
 	}
-    printf("%s\n", "Set wavelength done");
+    //printf("%s\n", "Set wavelength done");
 	
 	/* Rayleigh Scattering */
 //ms2023: to be revisited regarding pressure dependencies
@@ -221,7 +227,7 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
         if (RefIdxType == 6) {crossr[i] = 8.14e-13*pow(wavelength[i]*10.0,-4)+1.28e-6*pow(wavelength[i]*10.0,-6)+1.61*pow(wavelength[i]*10.0,-8); } /* Dalgarno 1962 */
 		/* printf("%s\t%f\t%s\t%e\n", "The reyleigh scattering cross-section at wavelength", wavelength[i], "nm is", crossr[i]); */
 	}
-    printf("%s\n", "Rayleigh scattering done");
+    //printf("%s\n", "Rayleigh scattering done");
 	/* Obtain the stellar radiation */
 	fp2=fopen(STAR_SPEC,"r");
 	fp3=fopen(STAR_SPEC,"r");
@@ -239,14 +245,14 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 	for (j=i; j<NLAMBDA; j++) {
 		solar[j] = solar[i-1]*pow(wavelength[i-1],4)/pow(wavelength[j],4); //ms2021: what?
 	}
-	printf("%s\n", "Stellar radiation data is imported.");
+	//printf("%s\n", "Stellar radiation data is imported.");
 	
 	/* Initial Mean Molecular Mass */
 	for (j=1; j<=zbin; j++) {
 		meanmolecular[j] = AIRM;
 	}
 	
-printf("%s\n\n",fillmi);
+//printf("%s\n\n",fillmi);
 	double PMIN, PMAX, PSTEP, scaleheight;
 	/* Set up the P-T-z for calculation */
 	if (TPMODE==1) {
@@ -302,7 +308,16 @@ printf("%s\n\n",fillmi);
 	
 	/* Set up the P-T-z for calculation */
 	if (TPMODE==0) {
-		TPPara(P,T,TINV,zbin+1,PTOP,TTOP,PMIDDLE,TMIDDLE,PSTR,TSTR,PTROP,TTROP,PBOTTOM);
+        //Compute irradiation temperature
+        if (TTOP == 0) {  // Only calculate if TTOP not provided
+            new_ttop = STAR_TEMP * pow((STAR_RADIUS*0.00465047/ORBIT), 0.5) * pow(FADV, 0.25); //calculate equilibrium temperature at the top of atm
+            TPPara(P,T,TINV,zbin+1,PTOP,new_ttop,PMIDDLE,new_ttop,PSTR,new_ttop,PTROP,new_ttop,PBOTTOM);
+        } else {
+            printf("Note: Using predefined temperature value from parameter file\n");
+        	TPPara(P,T,TINV,zbin+1,PTOP,TTOP,PMIDDLE,TMIDDLE,PSTR,TSTR,PTROP,TTROP,PBOTTOM);
+
+        }
+        
 		Reverse(P,zbin+1); //here P is in Pa
 		Reverse(T,zbin+1);
         /*for (j=0; j<=zbin; j++) {
@@ -331,8 +346,10 @@ printf("%s\n\n",fillmi);
 //ms2023			zl[j] = (z[j]+z[j-1])/2.0;
                         //zdoub[2*j-1] = zl[j]; //ms2023: double grid
 //ms2023		}
-                printf("%s\n%-10s  %-10s\n", "Initial TP profile calculated:","T[K]","P[Pa]");
-		for (j=zbin; j>=0; j--) {printf("%-10.2f  %-10.2e\n",T[j],P[j]);}
+                //printf("%s\n%-10s  %-10s\n", "Initial TP profile calculated:","T[K]","P[Pa]");
+		//for (j=zbin; j>=0; j--) {printf("%-10.2f  %-10.2e\n",T[j],P[j]);}
+        printf("Top    T: %-10.2f  P: %-10.2e\n", T[zbin], P[zbin]);
+        printf("Bottom T: %-10.2f  P: %-10.2e\n", T[0], P[0]);
         }
 
 	FILE *TPPrint;
@@ -341,14 +358,14 @@ printf("%s\n\n",fillmi);
 		MMZ[j] = P[j]/KBOLTZMANN/T[j]*1.0E-6;
                 MMdoub[2*j] = MMZ[j]; //ms2023: double grid
 	}
-        printf("%s\n%-10s %-10s %-10s %-14s\n", "Mid-layer TP profile:","Height[km]","P[Pa]","T[K]","Dens[mol/cm3]");
+        //printf("%s\n%-10s %-10s %-10s %-14s\n", "Mid-layer TP profile:","Height[km]","P[Pa]","T[K]","Dens[mol/cm3]");
 	for (j=zbin; j>=1; j--) {
 		MM[j]=pl[j]/KBOLTZMANN/tl[j]*1.0E-6; /*unit: Molecule cm-3*/
                 MMdoub[2*j-1] = MM[j]; //ms2023: double grid
-        printf("%-10.1f %-10.2e %-10.2f %-14.2e\n", zl[j], pl[j], tl[j], MM[j]);
+        //printf("%-10.1f %-10.2e %-10.2f %-14.2e\n", zl[j], pl[j], tl[j], MM[j]);
 	fprintf(TPPrint, "%lf %lf %lf %e\n", zl[j], pl[j], tl[j], MM[j]);
 	} 
-	printf("%s\n", "The Z-T-P data is imported/calculated.");
+	//printf("%s\n", "The Z-T-P data is imported/calculated.");
 	fclose(TPPrint);
 //atexit(pexit);exit(0); //ms debugging mode
 	
@@ -369,7 +386,7 @@ printf("%s\n\n",fillmi);
 	while (fgets(dataline, 10000, fspecies) != NULL )
 	{
 		sscanf(dataline, "%s %s %d %d %le %lf %d %lf %le", (species+i)->name, (species+i)->type, &((species+i)->num), &((species+i)->mass), &((species+i)->mix), &((species+i)->upper), &((species+i)->lowertype), &((species+i)->lower), &((species+i)->lower1));
-		printf("%8s %2s %4d %4.2d %10.2e %5.2f %3d %5.2f %10.2e\n",(species+i)->name, (species+i)->type, (species+i)->num, (species+i)->mass, (species+i)->mix, (species+i)->upper, (species+i)->lowertype, (species+i)->lower, (species+i)->lower1);
+		//printf("%8s %2s %4d %4.2d %10.2e %5.2f %3d %5.2f %10.2e\n",(species+i)->name, (species+i)->type, (species+i)->num, (species+i)->mass, (species+i)->mix, (species+i)->upper, (species+i)->lowertype, (species+i)->lower, (species+i)->lower1);
         if (strcmp("X",species[i].type)==0) {numx=numx+1; fprintf(fout21, "%s\t\t\t", (species+i)->name);}
 		if (strcmp("F",species[i].type)==0) {numf=numf+1; fprintf(fout22, "%s\t\t\t", (species+i)->name);}
 		if (strcmp("C",species[i].type)==0) {numc=numc+1;}
@@ -470,7 +487,7 @@ printf("%s\n\n",fillmi);
     }
 	int labels[numx+numf+1];
 	
-printf("%s\n\n",fillmi);
+//printf("%s\n\n",fillmi);
 	
 	/* Get Reaction List */
 	fzone=fopen(REACTION_LIST, "r");
@@ -630,7 +647,7 @@ printf("%s\n\n",fillmi);
 		free_dvector(qyp5t,0,s-1);
 		free_dvector(qyp6t,0,s-1);
 		free_dvector(qyp7t,0,s-1);
-		printf("%s %s %s\n", "The", species[j].name, "Cross section and quantum yield data are imported.");
+		//printf("%s %s %s\n", "The", species[j].name, "Cross section and quantum yield data are imported.");
 		fprintf(fcheck, "%s %s %s\n", "The", species[j].name, "Cross section and quantum yield data are imported.");
 		for (j=0;j<NLAMBDA;j++) {fprintf(fcheck, "%lf %le %le %lf %lf\n", wavelength[j], cross[i][j], crosst[i][j], qy[i][j], qyt[i][j]);} 
 	}
@@ -738,6 +755,7 @@ printf("%s\n\n",fillmi);
         //for (j=1; j<=zbin; j++)  for (i=1; i<=NSP; i++) clouds[j][i]=0.0; //initializing for Climate
 
         /* IMODE = 4: from existing files */
+    time_t start_time = time(NULL); //start timer for chem eq
     if (IMODE == 4) {
         strcpy(outstd0,dirroute);
         strcat(outstd0,"/ConcentrationSTD_C.dat");
@@ -794,7 +812,7 @@ printf("%s\n\n",fillmi);
     //strcpy(outstd,dirroute);
     //strcat(outstd,"/ConcentrationSTD_T.dat");
     //printf("%s\t%s\n","Prepare to write molecular concentration to", outstd);
-    printf("%s\n", "Variable initialization successful");
+    //printf("%s\n", "Variable initialization successful");
     //printout_std(z,outstd);
     
     strcpy(outoldstd,dirroute);
@@ -802,8 +820,9 @@ printf("%s\n\n",fillmi);
     printout_std(z,outoldstd);
     }
 
-    if (IMODE < 4) {
 
+    if (IMODE < 4) {
+        
     /* compute the initial molecular abundances */
     for (i=1; i<=numx; i++) {labels[i]=labelx[i];}
     for (i=1; i<=numf; i++) {labels[numx+i]=labelf[i];}
@@ -826,10 +845,14 @@ printf("%s\n\n",fillmi);
         }
     }
     free_dmatrix(mixequil,1,zbin,1,numx+numf);
+
+    time_t end_time = time(NULL);
+    double time_elapsed = difftime(end_time, start_time);
+    printf("** Chemical equilibrium achieved in %.0f seconds **\n", time_elapsed);
     
     /* Generate General Variables */
     Convert1(Con, ConC, Conf, labelx, labelc, labelf); //getting XX from Con
-    printf("%s\n", "Variable initialization successful");
+    //printf("%s\n", "Variable initialization successful");
     } //IMODE<4
 
     /* Generate Mean Molecular Mass */
@@ -846,10 +869,11 @@ printf("%s\n\n",fillmi);
         totalmass += heliumnumber*4.0;
         meanmolecular[j] = totalmass/totalnumber;
     }
-    printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer ", j-1, "is", meanmolecular[j-1]);
-    printf("%s %d %s %2.2e\n","Helium mixing ratio at layer ", j-1, "is", heliumnumber/totalnumber);
-    
+    //printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer ", j-1, "is", meanmolecular[j-1]);
+    //printf("%s %d %s %2.2e\n","Helium mixing ratio at layer ", j-1, "is", heliumnumber/totalnumber);
+    printf("%s\n\n",fillmi); 
     /* Obtain the opacity */
+    
     opacCO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacH2O = dmatrix(1,zbin,0,NLAMBDA-1);
@@ -875,11 +899,17 @@ printf("%s\n\n",fillmi);
     opacSO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacOCS = dmatrix(1,zbin,0,NLAMBDA-1);
     
+
+
+    printf("Reading CIA opacities\n");
     readcia();
     planckmeanCIA();
-    printf("CIA mean opacity in the infrared calculated!\n");
+    //printf("CIA mean opacity in the infrared calculated!\n");
     
 //clock_gettime(CLOCK_REALTIME, &tstart);
+
+    printf("Reading main opacities\n");
+    
 
     printf("Reading opacC2H2.dat\n");
     strcpy(crossfile,CROSSHEADING);
@@ -1157,6 +1187,9 @@ printf("%s\n\n",fillmi);
         }
         
         /* Update Opacities */
+
+        printf("%s\n", "Updating Opacities!!!");
+
         readcia();
         planckmeanCIA();
         printf("CIA mean opacity in the infrared calculated!\n");
@@ -1286,6 +1319,7 @@ printf("%s\n\n",fillmi);
     fclose(fstat); */
     
     /* Clean up */
+    
     free_dmatrix(opacCO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacH2O,1,zbin,0,NLAMBDA-1);
@@ -1309,12 +1343,14 @@ printf("%s\n\n",fillmi);
     free_dmatrix(opacH2S,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacSO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacOCS,1,zbin,0,NLAMBDA-1);
+    
 
     /* Clean up */
     free_dmatrix(cross,1,nump,0,NLAMBDA-1);
     free_dmatrix(qy,1,nump,0,NLAMBDA-1);
     free_dmatrix(crosst,1,nump,0,NLAMBDA-1);
     free_dmatrix(qyt,1,nump,0,NLAMBDA-1);
+
 
 	
 //=== END: MAIN PROGRAM ==================================

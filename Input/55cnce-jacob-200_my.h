@@ -12,7 +12,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define IN_FILE_NAME    "55cnce-jacob-200_my.h"
 //---------------------------------------------------------------------
 //#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
-#define OUT_DIR         "Results/55cnce/helios_benchmark/"
+#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
 //#define OUT_DIR         "Results/toi270d-valid2-Texp8/"
 //#define OUT_DIR         "Results/toi270d-valid3-lowTiso/"
 //#define OUT_DIR         "Results/toi270d-valid4-highTiso/"
@@ -55,9 +55,9 @@ Note: The parameters in this file can be modified to model different planets aro
 			4: Import from results of previous calculations in the standard form (TP import only for rad) */
 
 /* Iteration Conditions */
-#define NMAX        1       /* Maximum Climate - Chemistry Iterations */
+#define NMAX        0       /* Maximum Climate - Chemistry Iterations */
 #define NMAX_RC     1       /* Maximum Radiative - Convective Iterations */
-#define NMAX_RT     2000  /* Maximum Radiative Transfer Iterations */
+#define NMAX_RT     50  /* Maximum Radiative Transfer Iterations */
 #define NRT_RC      2000  /*RT steps between Convective adjustments after initial RT equilibrium */
 
 /* Planet Physical Properties */
@@ -124,7 +124,7 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Radiative Convective Calculation*/
 #define IFRC        1        /* do we update radiative-convective boundary in each radiative balance iteration? */
-
+#define Tol_RC_T    2.0e-0  /* convergence tolerance in temperature, in Kelvin */
 #define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) */
 #define Tol_RC      1.0E+0 /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 (satisfying any of them is ok) */
 #define Tol_FRATIO  1.0E-5  //convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4
@@ -135,9 +135,7 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Input choices for the infrared opacities */
 /* Must be set to the same as the opacity code */
-
 #define CROSSHEADING		"../Opacity/H2_FullT_LowRes/"
-#define OPACITY_SPECIES_FILE "Input/opacity_list/test_opacities.dat"
 
 #define NTEMP       20             /* Number of temperature points in grid   */
 #define TLOW        100.0           /* Temperature range in K                 */

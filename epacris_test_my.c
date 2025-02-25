@@ -58,17 +58,29 @@ double **opacHBrO, **opacPH3, **opacCH3Cl, **opacCH3Br, **opacDMS, **opacCS2;
 double **cross, **crosst; //PhotoCross in Clima
 int *stdcross; //PhotoCross in Clima
 double *qysum; //PhotoCross in Clima
+
+// TODO: These arrays will be replaced with struct-based system
+// DEPRECATED - Will be removed after transition to OpacitySystem 
 double MeanCO2[zbin+1], MeanO2[zbin+1], MeanSO2[zbin+1], MeanH2O[zbin+1], MeanOH[zbin+1], MeanH2CO[zbin+1];
 double MeanH2O2[zbin+1], MeanHO2[zbin+1], MeanH2S[zbin+1], MeanCO[zbin+1], MeanO3[zbin+1], MeanCH4[zbin+1];
 double MeanNH3[zbin+1];	
 double MeanC2H2[zbin+1], MeanC2H4[zbin+1], MeanC2H6[zbin+1], MeanHCN[zbin+1], MeanCH2O2[zbin+1], MeanHNO3[zbin+1];
 double MeanN2O[zbin+1], MeanN2[zbin+1], MeanNO[zbin+1], MeanNO2[zbin+1], MeanOCS[zbin+1];
-
 double SMeanCO2[zbin+1], SMeanO2[zbin+1], SMeanSO2[zbin+1], SMeanH2O[zbin+1], SMeanOH[zbin+1], SMeanH2CO[zbin+1];
 double SMeanH2O2[zbin+1], SMeanHO2[zbin+1], SMeanH2S[zbin+1], SMeanCO[zbin+1], SMeanO3[zbin+1], SMeanCH4[zbin+1];
 double SMeanNH3[zbin+1];
 double SMeanC2H2[zbin+1], SMeanC2H4[zbin+1], SMeanC2H6[zbin+1], SMeanCH2O2[zbin+1];
 double SMeanHCN[zbin+1], SMeanN2O[zbin+1], SMeanN2[zbin+1], SMeanNO[zbin+1], SMeanNO2[zbin+1], SMeanOCS[zbin+1], SMeanHNO3[zbin+1];
+
+// Define species enum for clearer indexing
+enum OpacitySpecies {
+    SP_C2H2, SP_C2H4, SP_C2H6, SP_CH2O2, SP_CH4,
+    SP_CO2, SP_CO, SP_H2CO, SP_H2O2, SP_H2O,
+    SP_H2S, SP_HCN, SP_HNO3, SP_HO2, SP_N2O,
+    SP_N2, SP_NH3, SP_NO2, SP_NO, SP_O2,
+    SP_O3, SP_OCS, SP_OH, SP_SO2,
+    NUM_SPECIES  // Automatically tracks number of species
+};
 
 int    ReactionR[NKin+1][7], ReactionM[NKinM+1][5], ReactionP[NPho+1][9], ReactionT[NKinT+1][4];
 int    numr=0, numm=0, numt=0, nump=0, numx=0, numc=0, numf=0, numa=0, waternum=0, waterx=0;
@@ -87,16 +99,127 @@ char fillpl[] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 //end edits
 
-double new_ttop;
+// Add these function declarations near the top of the file with other function declarations
+void init_opacity_system(void);
+void read_all_opacities(void);
+void free_opacity_system(void);
 
-// Structure definitions
-struct OpacityData {
-    char name[10];
-    double **opac;  // This will hold the dmatrix
-    double *mean;
-    double *smean;
+double new_ttop; // MZ2025: new temperature self-consistent
+
+// Structure for all opacity-related data
+struct OpacitySystem {
+    double **mean;     // [species][altitude]
+    double **smean;    // [species][altitude]
+    double ***opac;    // [species][altitude][wavelength]
+    char **names;      // Remove const qualifier
+    int num_species;
+    int num_altitudes;
+    int num_wavelengths;
 };
 
+// Global opacity system
+struct OpacitySystem opacity_sys;
+
+// Initialize the opacity system
+void init_opacity_system() {
+    printf("Initializing opacity system...\n");
+    opacity_sys.num_species = NUM_SPECIES;
+    opacity_sys.num_altitudes = zbin + 1;
+    opacity_sys.num_wavelengths = NLAMBDA;
+    
+    printf("Allocating memory for %d species, %d altitudes, %d wavelengths\n", 
+           NUM_SPECIES, opacity_sys.num_altitudes, opacity_sys.num_wavelengths);
+    
+    // Allocate memory for species names with error checking
+    opacity_sys.names = calloc(NUM_SPECIES, sizeof(char*));  // Using calloc to zero-initialize
+    if (opacity_sys.names == NULL) {
+        printf("Failed to allocate memory for names array\n");
+        exit(1);
+    }
+    
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        opacity_sys.names[i] = calloc(10, sizeof(char));  // Using calloc to zero-initialize
+        if (opacity_sys.names[i] == NULL) {
+            printf("Failed to allocate memory for species name %d\n", i);
+            exit(1);
+        }
+    }
+
+    // Initialize species names in the same order as the enum
+    strncpy(opacity_sys.names[SP_C2H2], "C2H2", 9);
+    strncpy(opacity_sys.names[SP_C2H4], "C2H4", 9);
+    // strncpy(opacity_sys.names[SP_C2H6], "C2H6", 9);
+    // strncpy(opacity_sys.names[SP_CH2O2], "CH2O2", 9);
+    // strncpy(opacity_sys.names[SP_CH4], "CH4", 9);
+    // strncpy(opacity_sys.names[SP_CO2], "CO2", 9);
+    // strncpy(opacity_sys.names[SP_CO], "CO", 9);
+    // strncpy(opacity_sys.names[SP_H2CO], "H2CO", 9);
+    // strncpy(opacity_sys.names[SP_H2O2], "H2O2", 9);
+    // strncpy(opacity_sys.names[SP_H2O], "H2O", 9);
+    // strncpy(opacity_sys.names[SP_H2S], "H2S", 9);
+    // strncpy(opacity_sys.names[SP_HCN], "HCN", 9);
+    // strncpy(opacity_sys.names[SP_HNO3], "HNO3", 9);
+    // strncpy(opacity_sys.names[SP_HO2], "HO2", 9);
+    // strncpy(opacity_sys.names[SP_N2O], "N2O", 9);
+    // strncpy(opacity_sys.names[SP_N2], "N2", 9);
+    // strncpy(opacity_sys.names[SP_NH3], "NH3", 9);
+    // strncpy(opacity_sys.names[SP_NO2], "NO2", 9);
+    // strncpy(opacity_sys.names[SP_NO], "NO", 9);
+    // strncpy(opacity_sys.names[SP_O2], "O2", 9);
+    // strncpy(opacity_sys.names[SP_O3], "O3", 9);
+    // strncpy(opacity_sys.names[SP_OCS], "OCS", 9);
+    // strncpy(opacity_sys.names[SP_OH], "OH", 9);
+    // strncpy(opacity_sys.names[SP_SO2], "SO2", 9);
+
+    // Allocate and initialize mean and smean arrays
+    printf("Allocating memory for mean and smean arrays...\n");
+    opacity_sys.mean = calloc(NUM_SPECIES, sizeof(double*));  // Using calloc
+    opacity_sys.smean = calloc(NUM_SPECIES, sizeof(double*)); // Using calloc
+    if (opacity_sys.mean == NULL || opacity_sys.smean == NULL) {
+        printf("Failed to allocate memory for mean/smean arrays\n");
+        exit(1);
+    }
+
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        opacity_sys.mean[i] = dvector(1, zbin);
+        opacity_sys.smean[i] = dvector(1, zbin);
+        if (opacity_sys.mean[i] == NULL || opacity_sys.smean[i] == NULL) {
+            printf("Failed to allocate memory for mean/smean vectors for species %d\n", i);
+            exit(1);
+        }
+        // Initialize arrays to zero
+        for (int j = 1; j <= zbin; j++) {
+            opacity_sys.mean[i][j] = 0.0;
+            opacity_sys.smean[i][j] = 0.0;
+        }
+        printf("Initialized mean/smean arrays for species %s\n", opacity_sys.names[i]);
+    }
+
+    // Allocate and initialize opacity arrays
+    printf("Allocating memory for opacity arrays...\n");
+    opacity_sys.opac = calloc(NUM_SPECIES, sizeof(double**));  // Using calloc
+    if (opacity_sys.opac == NULL) {
+        printf("Failed to allocate memory for opac array\n");
+        exit(1);
+    }
+
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        opacity_sys.opac[i] = dmatrix(1, zbin, 0, NLAMBDA-1);
+        if (opacity_sys.opac[i] == NULL) {
+            printf("Failed to allocate memory for opacity matrix for species %d\n", i);
+            exit(1);
+        }
+        // Initialize array to zero
+        for (int j = 1; j <= zbin; j++) {
+            for (int k = 0; k < NLAMBDA; k++) {
+                opacity_sys.opac[i][j][k] = 0.0;
+            }
+        }
+        printf("Initialized opacity array for species %s\n", opacity_sys.names[i]);
+    }
+    
+    printf("Opacity system initialization complete\n");
+}
 
 
 double rt_drfluxmax_init;
@@ -121,6 +244,116 @@ double THETAREF; //previously in input file, but redefined there as 'degrees' ra
 #include "readcross.c"
 #include "printout_std.c"
 #include "printout_std_t_exp.c"
+
+
+
+// Then add the implementation of read_all_opacities
+void read_all_opacities(void) {
+    char crossfile[1024];
+    
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        printf("Reading opacity for species %s\n", opacity_sys.names[i]);
+        sprintf(crossfile, "%sopac%s.dat", CROSSHEADING, opacity_sys.names[i]);
+        
+        if (access(crossfile, F_OK) != 0) {
+            printf("Warning: Opacity file does not exist: %s\n", crossfile);
+            continue;
+        }
+        
+        printf("Reading cross section file: %s\n", crossfile);
+        
+        // Add verification before reading
+        FILE *fp = fopen(crossfile, "r");
+        if (fp == NULL) {
+            printf("Error opening file: %s\n", crossfile);
+            continue;
+        }
+        
+        // Check file size
+        fseek(fp, 0, SEEK_END);
+        long fileSize = ftell(fp);
+        printf("File size for %s: %ld bytes\n", opacity_sys.names[i], fileSize);
+        fclose(fp);
+        
+        // Read the data
+        readcross(crossfile, opacity_sys.opac[i]);
+        
+        // Verify data after reading
+        int nonZeroCount = 0;
+        double maxVal = 0.0;
+        for (int j = 1; j <= zbin; j++) {
+            for (int k = 0; k < NLAMBDA; k++) {
+                if (opacity_sys.opac[i][j][k] != 0.0) {
+                    nonZeroCount++;
+                    if (opacity_sys.opac[i][j][k] > maxVal) {
+                        maxVal = opacity_sys.opac[i][j][k];
+                    }
+                }
+            }
+        }
+        printf("Species %s: Found %d non-zero values, max value: %e\n", 
+               opacity_sys.names[i], nonZeroCount, maxVal);
+        
+        printf("Calculating Planck mean for species %s\n", opacity_sys.names[i]);
+        planckmean(opacity_sys.mean[i], opacity_sys.smean[i], opacity_sys.opac[i]);
+    }
+    
+    printf("All opacities processed successfully\n");
+}
+
+// Add this function to verify opacity data
+void verify_opacity_data() {
+    printf("Verifying opacity data before climate calculations...\n");
+    
+    // Check structure initialization
+    if (opacity_sys.num_species != NUM_SPECIES) {
+        printf("Error: Incorrect number of species\n");
+        exit(1);
+    }
+    
+    // Verify all pointers are valid and check data at multiple points
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        if (opacity_sys.names[i] == NULL) {
+            printf("Error: NULL name pointer for species %d\n", i);
+            exit(1);
+        }
+        if (opacity_sys.mean[i] == NULL) {
+            printf("Error: NULL mean pointer for species %s\n", opacity_sys.names[i]);
+            exit(1);
+        }
+        if (opacity_sys.smean[i] == NULL) {
+            printf("Error: NULL smean pointer for species %s\n", opacity_sys.names[i]);
+            exit(1);
+        }
+        if (opacity_sys.opac[i] == NULL) {
+            printf("Error: NULL opacity pointer for species %s\n", opacity_sys.names[i]);
+            exit(1);
+        }
+        
+        // Print values at multiple points
+        printf("Species %s:\n", opacity_sys.names[i]);
+        printf("  mean[1]=%e, mean[%d]=%e\n", 
+               opacity_sys.mean[i][1],
+               zbin,
+               opacity_sys.mean[i][zbin]);
+        printf("  smean[1]=%e, smean[%d]=%e\n",
+               opacity_sys.smean[i][1],
+               zbin,
+               opacity_sys.smean[i][zbin]);
+        printf("  opac[1][0]=%e, opac[1][%d]=%e\n",
+               opacity_sys.opac[i][1][0],
+               NLAMBDA-1,
+               opacity_sys.opac[i][1][NLAMBDA-1]);
+        printf("  opac[%d][0]=%e, opac[%d][%d]=%e\n",
+               zbin,
+               opacity_sys.opac[i][zbin][0],
+               zbin,
+               NLAMBDA-1,
+               opacity_sys.opac[i][zbin][NLAMBDA-1]);
+    }
+    
+    printf("Opacity data verification complete\n");
+}
 
 //=== START MAIN PROGRAM =================================
 //========================================================
@@ -920,61 +1153,20 @@ printf("%s\n\n",fillmi);
 
     printf("Reading main opacities\n");
     
-    // Count number of species in file
-    FILE *fp_opac = fopen(OPACITY_SPECIES_FILE, "r");
-    if (fp_opac == NULL) {
-        printf("Error: Could not open opacity species file: %s\n", OPACITY_SPECIES_FILE);
-        perror("fopen");  // This will print the system error message
-        exit(1);
-    }
+    // Initialize the opacity system
+    init_opacity_system();
     
-    printf("Counting number of species in file\n");
-
-    int num_species = 0;
-    char line[256];
-    while (fgets(line, sizeof(line), fp_opac)) {
-        if (strlen(line) > 1) num_species++; // Skip empty lines
-    }
-    rewind(fp_opac);
-
-    // Allocate and read species
-    struct OpacityData *opac_data = malloc(num_species * sizeof(struct OpacityData));
-    printf("Allocated memory for %d species\n", num_species);
-
-    for (int i = 0; i < num_species; i++) {
-        if (fgets(line, sizeof(line), fp_opac)) {
-            // Remove newline if present
-            line[strcspn(line, "\n")] = 0;
-            strcpy(opac_data[i].name, line);
-            opac_data[i].opac = dmatrix(1, zbin, 0, NLAMBDA-1);
-            opac_data[i].mean = dvector(1, NLAMBDA-1);
-            opac_data[i].smean = dvector(1, NLAMBDA-1);
-            printf("Allocated memory for species %d: %s\n", i, opac_data[i].name);
-        }
-    }
-
-    fclose(fp_opac);
-
-    // Process each species
-    for (int i = 0; i < num_species; i++) {
-        printf("Processing opacity for species %d: %s\n", i, opac_data[i].name);
-        
-        char crossfile[1024];
-        strcpy(crossfile, CROSSHEADING);
-        strcat(crossfile, "opac");
-        strcat(crossfile, opac_data[i].name);
-        strcat(crossfile, ".dat");
-        
-        printf("Reading cross section file: %s\n", crossfile);
-        readcross(crossfile, opac_data[i].opac);
-        printf("Calculating Planck mean for species %s\n", opac_data[i].name);
-        planckmean(opac_data[i].mean, opac_data[i].smean, opac_data[i].opac);
-    }
-
+    // Read all opacity data
+    read_all_opacities();
+    
     printf("All opacities processed successfully\n");
 
     // Before starting climate calculations
-    printf("Starting climate calculations with %d opacity species\n", num_species);
+    printf("Starting climate calculations with %d opacity species\n", NUM_SPECIES);
+
+    // Call this function just before starting climate calculations
+    // Add after "All opacities processed successfully" and before "Starting climate calculations"
+    verify_opacity_data();
 
     // strcpy(crossfile,CROSSHEADING);
     // strcat(crossfile,"opacC2H2.dat");
@@ -1404,12 +1596,11 @@ printf("%s\n\n",fillmi);
     // }
 
     // free opacity memory
-    for (int i = 0; i < num_species; i++) {
-        free_dmatrix(opac_data[i].opac, 1, zbin, 0, NLAMBDA-1);
-        free_dvector(opac_data[i].mean, 1, NLAMBDA-1);
-        free_dvector(opac_data[i].smean, 1, NLAMBDA-1);
+    for (int i = 0; i < NUM_SPECIES; i++) {
+        free_dmatrix(opacity_sys.opac[i], 1, zbin, 0, NLAMBDA-1);
+        free_dvector(opacity_sys.mean[i], 1, NLAMBDA-1);
+        free_dvector(opacity_sys.smean[i], 1, NLAMBDA-1);
     }
-    free(opac_data);
 
     /* Clean up */
     free_dmatrix(cross,1,nump,0,NLAMBDA-1);

@@ -1358,27 +1358,27 @@ printf("%s\n\n",fillmi);
         readcia();
         planckmeanCIA();
         printf("CIA mean opacity in the infrared calculated!\n");
-        
+        printf("Reading opacC2H2.dat\n");
         strcpy(crossfile,CROSSHEADING);
         strcat(crossfile,"opacCO2.dat");
         readcross(crossfile, opacCO2);
         planckmean(MeanCO2, SMeanCO2, opacCO2);
-        
+        printf("Reading opacC2H2.dat\n");
         strcpy(crossfile,CROSSHEADING);
         strcat(crossfile,"opacO2.dat");
         readcross(crossfile, opacO2);
         planckmean(MeanO2, SMeanO2, opacO2);
-        
+        printf("Reading opacC2H2.dat\n");
         strcpy(crossfile,CROSSHEADING);
         strcat(crossfile,"opacSO2.dat");
         readcross(crossfile, opacSO2);
         planckmean(MeanSO2, SMeanSO2, opacSO2);
-        
+        printf("Reading opacC2H2.dat\n");
         strcpy(crossfile,CROSSHEADING);
         strcat(crossfile,"opacH2O.dat");
         readcross(crossfile, opacH2O);
         planckmean(MeanH2O, SMeanH2O, opacH2O);
-        
+        printf("Reading opacC2H2.dat\n");
         strcpy(crossfile,CROSSHEADING);
         strcat(crossfile,"opacOH.dat");
         readcross(crossfile, opacOH);
