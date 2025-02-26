@@ -80,9 +80,11 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 //*************************************************************
     for (i=1; i<=NMAX_RC; i++) {
         
-        printf("%s\n",filleq);
-        printf("%s %d\n", "Rad-Conv loop i = ", i);
-        printf("%s\n",filleq);
+        if (i % PRINT_ITER == 0) {  // Only print every 100 iterations
+            printf("%s\n",filleq);
+            printf("%s %d\n", "Rad-Conv loop i = ", i);
+            printf("%s\n",filleq);
+        }
         
         /* store last RC boudary */
         for (j=0; j<=zbin; j++) t_old[j] = tempb[j];
@@ -121,8 +123,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             sumisequil=0;
             ms_RadTrans(Rflux, tempbnew, P, ncl, isconv, lapse, tempb, Tint, cp, dt, isequil);
 
-            
-            if (RTstepcount % 20 == 0) {
+            // Print status 
+            if (RTstepcount % PRINT_ITER == 0) {
                 // Create live_plot directory if it doesn't exist
                 system("mkdir -p live_plot");
                 
@@ -134,10 +136,23 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 }
                 fclose(temp_data);
                 
+                // Extract directory path from outnewtemp
+                char output_dir[1024];
+                strncpy(output_dir, outnewtemp, sizeof(output_dir) - 1);
+                output_dir[sizeof(output_dir) - 1] = '\0'; // Ensure null termination
+
+                // Find the last occurrence of '/' to get the directory path
+                char *last_slash = strrchr(output_dir, '/');
+                if (last_slash != NULL) {
+                    *(last_slash + 1) = '\0'; // Terminate the string at the last slash
+                } else {
+                    strcpy(output_dir, "./"); // Default to current directory if no slash is found
+                }
+
                 // Create gnuplot script
                 FILE *gp = fopen("live_plot/plot_script.gp", "w");
                 fprintf(gp, "set terminal png size 800,600\n");
-                fprintf(gp, "set output 'live_plot/TP_profile_step_%d.png'\n", RTstepcount);
+                fprintf(gp, "set output '%sTP_profile_step_%d.png'\n", output_dir, RTstepcount);
                 fprintf(gp, "set logscale y\n");
                 fprintf(gp, "set yrange [200:1e-8] reverse\n");
                 fprintf(gp, "set xrange [800:3200]\n");
@@ -154,9 +169,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 
                 // Print status
                 printf("%s %d\n", "Radiative loop RTstepCount = ", RTstepcount);
-                printf("%s\t%s\t%s\t%s\t%s\t%s\n","==== i","P[:]","T_old[:]","T_new[:]","Layer_equil","dt[:] ====");
+                //printf("%s\t%s\t%s\t%s\t%s\t%s\n","==== i","P[:]","T_old[:]","T_new[:]","Layer_equil","dt[:] ====");
                 for (j=zbin; j>=0; j--) {
-                    printf("%d\t%e\t%f\t%f\t%d\t%e\n",j,P[j],tempb[j],tempbnew[j],isequil[j],dt[zbin+1-j]);
+                    //printf("%d\t%e\t%f\t%f\t%d\t%e\n",j,P[j],tempb[j],tempbnew[j],isequil[j],dt[zbin+1-j]);
                     sumisequil += isequil[j];
                 }
             }
@@ -186,9 +201,13 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                     dRfluxmax = fmax(dRfluxmax,fabs((Rflux[radcount-1] - Rflux[radcount])));
                 }
             }
-            printf("%s\t%s\t%s\t%s\n","Conv_loop","Rad_loop","Residual flux max","dFnet max");
-            printf("%d\t\t%d\t\t%f\t%f\n", i, RTstepcount, Rfluxmax, dRfluxmax);
-            printf("%s\n",filleq);
+
+            if (RTstepcount % PRINT_ITER == 0) {
+                printf("%s\t%s\t%s\t%s\n","Conv_loop","Rad_loop","Residual flux max","dFnet max");
+                printf("%d\t\t%d\t\t%f\t%f\n", i, RTstepcount, Rfluxmax, dRfluxmax);
+                printf("%s\n",filleq);
+            }
+
             if ( (Rfluxmax < Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax < Tol_RC) || (dRfluxmax < 0.2*Tol_RC)  ) {
                 //if(sumisequil>=zbin){ //ms23: needs fine tuning before it can be used
                     printf("Radiative transfer done\n");
@@ -395,6 +414,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     //ms23: also diagnostic files
     FILE *fp,*frt,*frc,*fcon;
     fp=fopen(outnewtemp,"w");
+    // temperature file header
+    fprintf(fp, "#Height(km)\tPressure(log10(Pascal))\tTemperature(K)\n");
+
+
     frt=fopen(outrtdiag,"w");
     fprintf(frt,"%s\t%8s\t%8s\t%10s\t%10s\t%8s\t%s\n","Layer","Height","log(P)","Temp_bound.","Rflux","isequil","dt");
     frc=fopen(outrcdiag,"w");
@@ -406,7 +429,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
     for (j=0; j<=zbin; j++) 
     {
-        fprintf(fp, "%f\t%f\t%f\n", znew[j], log10(P[j]), tempeq[j]);
+        fprintf(fp, "%f\t%f\t%f\n", znew[j], log10(P[j]), tempeq[j]); // temperature file output
         fprintf(frt, "%d\t%8f\t%8f\t%10f\t%10f\t%d\t%e\n",j, znew[j], log10(P[j]), tempb[j], Rflux[j], isequil[j], dt[j]); //RadTrans diagnostics
         if (j>0)
         {

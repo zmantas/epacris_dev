@@ -24,7 +24,8 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 {
 
     int i=0, j, k, jj, l, j1, kk;
-    
+    static int iter = 0;
+
     double GA;
     GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET;
 	double mole2dust, planck, xlll;
@@ -486,7 +487,7 @@ if (TS_SCHEME == 0){
         drflux[j] = Fup[j-1]-Fdn[j-1]-Fup[j]+Fdn[j];
         drfluxmax = fmax(drfluxmax,fabs(drflux[j]) );
     }
-    printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
+    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
     if (RTstepcount==1) rt_drfluxmax_init=drfluxmax;//ms: let's scale things as a ratio to initial fluxes
 
     for (j=1; j<zbin; j++)//surface treatment included
@@ -523,10 +524,10 @@ if (TS_SCHEME == 1){
     }
     drflux[zbin] = NetFlux[zbin-1][0] - SIGMA*pow(Tint,4.0) ; //Surface "layer" separately
     drfluxmax = fmax(drfluxmax,fabs(drflux[zbin]));
-    printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
+    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
     dcflux[zbin] = Fcup[zbin]-Fcdn[zbin] - SIGMA*pow(Tint,4.0) ; //Surface "layer" separately
     dcfluxmax = fmax(dcfluxmax,fabs(dcflux[zbin]));
-    printf("%s %.3e\n","dcFLUX_max= ",dcfluxmax);
+    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dcFLUX_max= ",dcfluxmax);
     if (RTstepcount==1) rt_drfluxmax_init=drfluxmax;//ms: let's store in case we need it
 
     for (j=1; j<=zbin; j++)
@@ -582,10 +583,12 @@ if (TS_SCHEME == 1){
     free_dvector(Fdn,0,zbin);
     free_dvector(Fcup,0,zbin);
     free_dvector(Fcdn,0,zbin);
+
+    iter++;
     
     /*printf("%s\t%f\n", "Top-of-Atmosphere incoming radiation flux is", radiationI0);
     printf("%s\t%f\n", "Bottom-of-Atmospehre incoming radiation flux is", radiationI1);*/
-    printf("%s\t%f\n", "TOA outgoing net radiation flux is", radiationO);
+    if (iter % PRINT_ITER == 0) printf("%s\t%f\n", "TOA outgoing net radiation flux is", radiationO);
 	
 //atexit(pexit);exit(0); //ms debugging mode
 }

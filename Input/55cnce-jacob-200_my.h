@@ -57,9 +57,9 @@ Note: The parameters in this file can be modified to model different planets aro
 /* Iteration Conditions */
 #define NMAX        0       /* Maximum Climate - Chemistry Iterations */
 #define NMAX_RC     1       /* Maximum Radiative - Convective Iterations */
-#define NMAX_RT     50  /* Maximum Radiative Transfer Iterations */
+#define NMAX_RT     1000  /* Maximum Radiative Transfer Iterations */
 #define NRT_RC      2000  /*RT steps between Convective adjustments after initial RT equilibrium */
-
+#define PRINT_ITER  50  //x steps to print parameters
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)
 //M_Earth = 5.97237E+24 kg
@@ -111,7 +111,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define TSTR        0       /* Temperature at PSTR Set to 0 for automatic */
 #define PTROP       1.0E+0       /* Pressure at the bottom of troposphere */
 #define TTROP       0       /* Temperature at PTROP Set to 0 for automatic */
-#define PBOTTOM     2.0E+2       /* Pressure at the bottom of atmosphere */
+#define PBOTTOM     1.0E+1       /* Pressure at the bottom of atmosphere */
 
 /* Molecular Species */
 #define SPECIES_LIST "Condition/SpeciesList/species_general_CHONS_exp.dat"
@@ -124,11 +124,12 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Radiative Convective Calculation*/
 #define IFRC        1        /* do we update radiative-convective boundary in each radiative balance iteration? */
-#define Tol_RC_T    2.0e-0  /* convergence tolerance in temperature, in Kelvin */
+#define Tol_RC_T    3.0e-0  /* This is outside the RT time-stepping | convergence tolerance in temperature, in Kelvin */
 #define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) */
 #define Tol_RC      1.0E+0 /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 (satisfying any of them is ok) */
 #define Tol_FRATIO  1.0E-5  //convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4
 
+//this is for matrix solver i think
 #define R_RELAX     1.0e-1     /* relaxation factor in implicit Euler stepping of radiative balance */
 #define DT_MAX      1.0e-1     /* maximum dT change in implicit Euler stepping of radiative balance */
 #define RJACOB_TEMPVAR 1.0e+0  /* temperature variation in calculating the Jacobian */
