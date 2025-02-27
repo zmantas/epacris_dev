@@ -28,7 +28,7 @@ char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
 //#include "Input/k218b-time.h"
 //#include "Input/k218b-jacob.h"
 //
-#include "Input/helios_benchmark/55cnce_comp2_f067.h"
+#include "Input/helios_benchmark/55cnce_comp3_f025.h"
 
 #include "constant.h"
 #include "ms_functions.h" //ms2021
@@ -118,7 +118,7 @@ double THETAREF; //previously in input file, but redefined there as 'degrees' ra
 const char* species[] = {
     "C2H2", "C2H4", "CH4", "CO2", "CO", "H2CO",
     "H2O2", "H2O", "H2S", "HCN", "HNO3", "N2O", "N2",
-    "NH3", "NO2", "NO", "O2", "OH", "SO2" //"OCS", "O3", "C2H6", "CH2O2", "HO2"
+    "NH3", "NO2", "NO", "O2", "OH", "SO2" //,"OCS", "O3", "C2H6", "CH2O2", "HO2"
 };
 #define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
 
