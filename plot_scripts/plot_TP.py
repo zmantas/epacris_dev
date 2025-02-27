@@ -2,6 +2,11 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+import seaborn as sns
+
+# Set seaborn style
+sns.set_theme()
+sns.set_style("ticks")
 
 # Define a set of distinct colors that are easier on the eyes
 cyberpunk_colors = [
@@ -16,7 +21,7 @@ cyberpunk_colors = [
 ]
 
 # Get all .txt files in the specified directory
-tp_files = glob.glob('./HELIOS_output/bench_comp1/*.txt')
+tp_files = glob.glob('./HELIOS_output/bench_comp2/*.txt')
 
 # Create empty lists to store data from all files
 all_data = []
@@ -39,10 +44,17 @@ if not tp_files:
 else:
     # Plot each temperature profile with distinct colors and increased line thickness
     for i, data in enumerate(all_data):
-        plt.plot(data[:, 1], data[:, 0] / 1e6, label=file_names[i], color=cyberpunk_colors[i % len(cyberpunk_colors)], linewidth=2.5)
+        # Check if filename contains 100, 101, or 102 and use black color
+        if any(str(num) in file_names[i] for num in [103, 104, 105]):
+            color = 'black'
+            zord = -10
+        else:
+            color = cyberpunk_colors[i % len(cyberpunk_colors)]
+            zord = 100
+        plt.plot(data[:, 1], data[:, 0] / 1e6, label=file_names[i], color=color, linewidth=2.5, zorder=zord)
 
     # List of suffixes to plot - modify this list to choose which profiles to show
-    suffixes = ['comp1_f025', 'comp1_f033', 'comp1_f067']
+    suffixes = ['comp2_f025', 'comp2_f033', 'comp2_f067']
 
     # Plot each 55cnce profile with the same color set
     for i, suffix in enumerate(suffixes):
@@ -62,10 +74,11 @@ else:
     plt.yscale('log')  # Set y-axis to log scale
     plt.ylim(1e-8, 1e1)  # Set y-axis limits from 1e-8 to 10 bar
     plt.gca().invert_yaxis()  # Invert the pressure axis
+    plt.tick_params(axis='both', direction='in')  # Make ticks point inwards
 
     os.makedirs('output', exist_ok=True)
-    # Save the figure
-    plt.savefig('output/temperature_profiles_bench_comp1.png')
+    # Save the figure in high resolution
+    plt.savefig('output/temperature_profiles_bench_comp2.png', dpi=400, bbox_inches='tight')
 
     plt.show()  # Display the plot
 

@@ -48,7 +48,7 @@ Note: The parameters in this file can be modified to model different planets aro
 //--------------------------------------------------------------------- 
 //--------------------------------------------------------------------- 
 /* Initial Concentration Setting */
-#define IMODE       1   /*  0: Calculate initial concentrations from chemical equilibrium sub-routines (not rad);
+#define IMODE       0   /*  0: Calculate initial concentrations from chemical equilibrium sub-routines (not rad);
                         1: Import from SPECIES_LIST;
                         2: Import from results of previous calculations
                         3: Calculate initial concentrations from simplied chemical equilibrium formula (not rad);
@@ -114,7 +114,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define PBOTTOM     1.0E+1       /* Pressure at the bottom of atmosphere */
 
 /* Molecular Species */
-#define SPECIES_LIST "Condition/SpeciesList/helios_comp2.dat"
+#define SPECIES_LIST "Condition/SpeciesList/species_general_CHONS_exp.dat"
 //- CONVECTION -----------------------
 #define NCONDENSIBLES 2  //how many potentially condensing species for moist adiabat, cloud formation, and rain-out
 #define CONDENSIBLES (int[]){7,9} //H2O=7; NH3=9; CO=20; CH4=21; CO2=52; H2=53; O2=54; N2=55

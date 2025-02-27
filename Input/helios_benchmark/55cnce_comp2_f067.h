@@ -9,17 +9,17 @@ Note: The parameters in this file can be modified to model different planets aro
 #define _PLANET_H_
 
 //--------------------------------------------------------------------- 
-#define IN_FILE_NAME    "55cnce_comp1_f067.h"
+#define IN_FILE_NAME    "55cnce_comp2_f067.h"
 //---------------------------------------------------------------------
 //#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
-#define OUT_DIR         "Results/55cnce/helios_benchmark/55cnce_comp1_f067/"
+#define OUT_DIR         "Results/55cnce/helios_benchmark/55cnce_comp2_f067/"
 //#define OUT_DIR         "Results/toi270d-valid2-Texp8/"
 //#define OUT_DIR         "Results/toi270d-valid3-lowTiso/"
 //#define OUT_DIR         "Results/toi270d-valid4-highTiso/"
 //#define OUT_DIR         "Results/toi270d-valid5-1DTERRA/"
 //#define OUT_DIR         "Results/toi270d-valid6-Tiso2k/"
 //---------------------------------------------------------------------
-#define COMMENTS        "helios_benchmark_55cnce_comp1_f067"
+#define COMMENTS        "helios_benchmark_55cnce_comp2_f067"
 //#define COMMENTS        "Time Stepping HELIOS, init Guillot; Tint=100K" //to be printed in log file for debugging purposes
 //#define COMMENTS        "Dayside: RC test n=10; with RT time stepping N=300; old adiabat and conv scheme" //to be printed in log file for debugging purposes
 //#define COMMENTS        "Dayside: RC test n=10; with RT time stepping N=300; New adiabat and New conv scheme" //to be printed in log file for debugging purposes
