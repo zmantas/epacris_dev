@@ -18,17 +18,19 @@ char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
 #include <time.h>
 #include <unistd.h>
 
-//#include "Input/debugging.h"
-//
-//#include "Input/jupiter-guillot.h"
-//#include "Input/jupiter-time.h"
-//#include "Input/jupiter-jacob.h"
-//
-//#include "Input/k218b-guillot.h"
-//#include "Input/k218b-time.h"
-//#include "Input/k218b-jacob.h"
-//
-#include "Input/helios_benchmark/55cnce_comp3_f025.h"
+
+//Input files
+//#include "Input/conv_test/55cnce_conv_test.h"
+#include "Input/conv_test/AlphaAb.h"
+// Opacity species list
+const char* species[] = {
+    
+    "SO2", "H2O","NH3", "N2", "CO2", "CO", "CH4","H2S","NO2", "NO", "O2", "OH"
+    // ,"OCS", "O3", "C2H6", "CH2O2", "HO2", "HCN", "HNO3", "N2O","C2H2", "C2H4", "H2CO","H2O2"
+};
+
+// Define NUM_SPECIES for external files
+#define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
 
 #include "constant.h"
 #include "ms_functions.h" //ms2021
@@ -37,6 +39,10 @@ char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
 #include "nrutil.h"
 #include <time.h>
 
+// Global variables needed by readcross.c
+// zbin defined by the macro in the header file
+// Define CROSSHEADING_STR as string for external use
+char CROSSHEADING_STR[1024] = CROSSHEADING;
 
 double TAUdoub[2*zbin+1], Tdoub[2*zbin+1], Pdoub[2*zbin+1], MMdoub[2*zbin+1], zdoub[2*zbin+1]; //double grid for non-isothermal layers: all bottom-up!!
 double meanmolecular[zbin+1];
@@ -88,8 +94,6 @@ char fillpl[] = "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //end edits
 
 double new_ttop;
-
-
 double rt_drfluxmax_init;
 int RTstepcount;
 double THETAREF; //previously in input file, but redefined there as 'degrees' rather than radian
@@ -114,118 +118,10 @@ double THETAREF; //previously in input file, but redefined there as 'degrees' ra
 #include "printout_std_t_exp.c"
 
 
-// Define the species list here
-const char* species[] = {
-    "C2H2", "C2H4", "CH4", "CO2", "CO", "H2CO",
-    "H2O2", "H2O", "H2S", "HCN", "HNO3", "N2O", "N2",
-    "NH3", "NO2", "NO", "O2", "OH", "SO2" //,"OCS", "O3", "C2H6", "CH2O2", "HO2"
-};
+
 #define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
 
-// Read all opacities from the species list
-void read_all_opacities() {
-    char crossfile[1024];
-    
-    printf("Reading opacities for %d species\n", (int)NUM_SPECIES); 
-    for (int i = 0; i < NUM_SPECIES; i++) {
-        printf("Reading opac%s.dat\n", species[i]);
-        strcpy(crossfile, CROSSHEADING);
-        strcat(crossfile, "opac");
-        strcat(crossfile, species[i]);
-        strcat(crossfile, ".dat");
-        
-        // Use switch to map species name to correct variables
-        switch(species[i][0]) {
-            case 'C':
-                if (strcmp(species[i], "C2H2") == 0) {
-                    readcross(crossfile, opacC2H2);
-                    planckmean(MeanC2H2, SMeanC2H2, opacC2H2);
-                } else if (strcmp(species[i], "C2H4") == 0) {
-                    readcross(crossfile, opacC2H4);
-                    planckmean(MeanC2H4, SMeanC2H4, opacC2H4);
-                } else if (strcmp(species[i], "C2H6") == 0) {
-                    readcross(crossfile, opacC2H6);
-                    planckmean(MeanC2H6, SMeanC2H6, opacC2H6);
-                } else if (strcmp(species[i], "CH2O2") == 0) {
-                    readcross(crossfile, opacCH2O2);
-                    planckmean(MeanCH2O2, SMeanCH2O2, opacCH2O2);
-                } else if (strcmp(species[i], "CH4") == 0) {
-                    readcross(crossfile, opacCH4);
-                    planckmean(MeanCH4, SMeanCH4, opacCH4);
-                } else if (strcmp(species[i], "CO2") == 0) {
-                    readcross(crossfile, opacCO2);
-                    planckmean(MeanCO2, SMeanCO2, opacCO2);
-                } else if (strcmp(species[i], "CO") == 0) {
-                    readcross(crossfile, opacCO);
-                    planckmean(MeanCO, SMeanCO, opacCO);
-                }
-                break;
-            case 'H':
-                if (strcmp(species[i], "H2CO") == 0) {
-                    readcross(crossfile, opacH2CO);
-                    planckmean(MeanH2CO, SMeanH2CO, opacH2CO);
-                } else if (strcmp(species[i], "H2O2") == 0) {
-                    readcross(crossfile, opacH2O2);
-                    planckmean(MeanH2O2, SMeanH2O2, opacH2O2);
-                } else if (strcmp(species[i], "H2O") == 0) {
-                    readcross(crossfile, opacH2O);
-                    planckmean(MeanH2O, SMeanH2O, opacH2O);
-                } else if (strcmp(species[i], "H2S") == 0) {
-                    readcross(crossfile, opacH2S);
-                    planckmean(MeanH2S, SMeanH2S, opacH2S);
-                } else if (strcmp(species[i], "HCN") == 0) {
-                    readcross(crossfile, opacHCN);
-                    planckmean(MeanHCN, SMeanHCN, opacHCN);
-                } else if (strcmp(species[i], "HNO3") == 0) {
-                    readcross(crossfile, opacHNO3);
-                    planckmean(MeanHNO3, SMeanHNO3, opacHNO3);
-                } else if (strcmp(species[i], "HO2") == 0) {
-                    readcross(crossfile, opacHO2);
-                    planckmean(MeanHO2, SMeanHO2, opacHO2);
-                }
-                break;
-            case 'N':
-                if (strcmp(species[i], "N2O") == 0) {
-                    readcross(crossfile, opacN2O);
-                    planckmean(MeanN2O, SMeanN2O, opacN2O);
-                } else if (strcmp(species[i], "N2") == 0) {
-                    readcross(crossfile, opacN2);
-                    planckmean(MeanN2, SMeanN2, opacN2);
-                } else if (strcmp(species[i], "NH3") == 0) {
-                    readcross(crossfile, opacNH3);
-                    planckmean(MeanNH3, SMeanNH3, opacNH3);
-                } else if (strcmp(species[i], "NO2") == 0) {
-                    readcross(crossfile, opacNO2);
-                    planckmean(MeanNO2, SMeanNO2, opacNO2);
-                } else if (strcmp(species[i], "NO") == 0) {
-                    readcross(crossfile, opacNO);
-                    planckmean(MeanNO, SMeanNO, opacNO);
-                }
-                break;
-            case 'O':
-                if (strcmp(species[i], "O2") == 0) {
-                    readcross(crossfile, opacO2);
-                    planckmean(MeanO2, SMeanO2, opacO2);
-                } else if (strcmp(species[i], "O3") == 0) {
-                    readcross(crossfile, opacO3);
-                    planckmean(MeanO3, SMeanO3, opacO3);
-                } else if (strcmp(species[i], "OCS") == 0) {
-                    readcross(crossfile, opacOCS);
-                    planckmean(MeanOCS, SMeanOCS, opacOCS);
-                } else if (strcmp(species[i], "OH") == 0) {
-                    readcross(crossfile, opacOH);
-                    planckmean(MeanOH, SMeanOH, opacOH);
-                }
-                break;
-            case 'S':
-                if (strcmp(species[i], "SO2") == 0) {
-                    readcross(crossfile, opacSO2);
-                    planckmean(MeanSO2, SMeanSO2, opacSO2);
-                }
-                break;
-        }
-    }
-}
+
 
 //=== START MAIN PROGRAM =================================
 //========================================================
@@ -243,19 +139,6 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
     THETAREF = PI/180.0*THETAANGLE; // comparing with original
     //THETAREF = 1.0471;
 //markus2021 
-    printf("%s\n",fillst);
-    printf("%s", "ExoSurfAir launched on ");
-    datetime();
-    printf("%s %s\n", "Original Author: ", authorig);
-    printf("%s %s\n", "Version: ", version);
-    printf("%s %s\n", "Edited by: ", editor);
-    printf("%s\n\n",fillst);
-   
-    if (strlen(COMMENTS)>0){
-    printf("%s %s\n", "Special Comments: ",COMMENTS);
-    printf("%s\n\n",fillmi);
-    }
-    
     printf("%s %s\n", "Input File: ",IN_FILE_NAME);
     printf("%s %s\n", "Results Directory: ",OUT_DIR);
     printf("%s\n\n",fillmi);
@@ -292,24 +175,22 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
     printf("%s\n\n",fillmi);
 //end edits
 //atexit(pexit);exit(0); //ms debugging mode
-	  int s,i,ii,j,jj,jjj,k,nn,qytype,stdnum,iradmax;
-	  int numr1=1,numm1=1,nump1=1,numt1=1;
-	  int nums;
-	  int numx1=1, numf1=1, numc1=1;
-	  char *temp;
-	  char dataline[10000];
-	  double temp1, wavetemp, crosstemp, DD, GA, DenZ;
-	  double z[zbin+1], T[zbin+1], PP[zbin+1], P[zbin+1], tempeq[zbin+1];
-//          double **JJ, **cross, **qy, *wavep, *crossp, *qyp, *qyp1, *qyp2, *qyp3, *qyp4, *qyp5, *qyp6, *qyp7;
-//	  double **crosst, **qyt, *crosspt, *qypt, *qyp1t, *qyp2t, *qyp3t, *qyp4t, *qyp5t, *qyp6t, *qyp7t;
-          double **JJ, **qy, *wavep, *crossp, *qyp, *qyp1, *qyp2, *qyp3, *qyp4, *qyp5, *qyp6, *qyp7;
-	  double **qyt, *crosspt, *qypt, *qyp1t, *qyp2t, *qyp3t, *qyp4t, *qyp5t, *qyp6t, *qyp7t;
-	  FILE *fspecies, *fzone, *fhenry, *fp, *fp1, *fp2, *fp3;
-          FILE *fout, *fout1, *fout21, *fout22, *fout3, *fout4, *fcheck, *ftemp, *fout5, *foutp, *fcheckgibbs;
-	  double **mixequil;
+    int s,i,ii,j,jj,jjj,k,nn,qytype,stdnum,iradmax;
+    int numr1=1, numm1=1, nump1=1, numt1=1;
+    int nums;
+    int numx1=1, numf1=1, numc1=1;
+    char *temp;
+    char dataline[10000];
+    double temp1, wavetemp, crosstemp, DD, GA, DenZ;
+    double z[zbin+1], T[zbin+1], PP[zbin+1], P[zbin+1], tempeq[zbin+1];
+    double **JJ, **qy, *wavep, *crossp, *qyp, *qyp1, *qyp2, *qyp3, *qyp4, *qyp5, *qyp6, *qyp7;
+    double **qyt, *crosspt, *qypt, *qyp1t, *qyp2t, *qyp3t, *qyp4t, *qyp5t, *qyp6t, *qyp7t;
+    FILE *fspecies, *fzone, *fhenry, *fp, *fp1, *fp2, *fp3;
+    FILE *fout, *fout1, *fout21, *fout22, *fout3, *fout4, *fcheck, *ftemp, *fout5, *foutp, *fcheckgibbs;
+    double **mixequil;
 
-      GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET; /* Planet Surface Gravity Acceleration, in SI */	
-	
+    GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET; /* Planet Surface Gravity Acceleration, in SI */	
+
 	/*Set the wavelength for calculation*/
     // Potential for optimization, to make the wl grid more efficient without loosing accuracy.
 	double dlambda, start, interval, lam[NLAMBDA];
@@ -857,8 +738,7 @@ printf("%s\n\n",fillmi);
     char outcondiag[1024]; //for Condensibles diagnostics
     
     strcpy(dirroute,OUT_DIR);
-    strcpy(atomfile,dirroute);
-    strcat(atomfile,"atom.dat");
+    strcpy(atomfile,ELE_ABUN);
     printf("%s\t%s\n","Prepare to get atom abundance from", atomfile);
     
     double totalmass;
@@ -936,7 +816,7 @@ printf("%s\n\n",fillmi);
     }
 
 
-    if (IMODE < 4) {
+    if (IMODE == 0) {
         
     /* compute the initial molecular abundances */
     for (i=1; i<=numx; i++) {labels[i]=labelx[i];}
@@ -964,11 +844,14 @@ printf("%s\n\n",fillmi);
     time_t end_time = time(NULL);
     double time_elapsed = difftime(end_time, start_time);
     printf("** Chemical equilibrium achieved in %.0f seconds **\n", time_elapsed);
+
+    }
     
+     if (IMODE < 4) {
     /* Generate General Variables */
     Convert1(Con, ConC, Conf, labelx, labelc, labelf); //getting XX from Con
     //printf("%s\n", "Variable initialization successful");
-    } //IMODE<4
+    } //IMODE>=4
 
     /* Generate Mean Molecular Mass */
     for (j=1; j<=zbin; j++) {
@@ -979,6 +862,8 @@ printf("%s\n\n",fillmi);
             totalmass   += Con[(j-1)*numx+i]*MoleculeM[i];
         }
         /* count for Helium */
+
+        // ##### WHY is helium added here? It also recalculated in ms_Climate_test_v1.c #####
         heliumnumber = fmax(MM[j] - totalnumber,0.0);
         totalnumber += heliumnumber;
         totalmass += heliumnumber*4.0;
@@ -987,8 +872,9 @@ printf("%s\n\n",fillmi);
     //printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer ", j-1, "is", meanmolecular[j-1]);
     //printf("%s %d %s %2.2e\n","Helium mixing ratio at layer ", j-1, "is", heliumnumber/totalnumber);
     printf("%s\n\n",fillmi); 
+
+    //########################################################################################
     /* Obtain the opacity */
-    
     opacCO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacH2O = dmatrix(1,zbin,0,NLAMBDA-1);
@@ -1015,55 +901,31 @@ printf("%s\n\n",fillmi);
     opacOCS = dmatrix(1,zbin,0,NLAMBDA-1);
 
     printf("Reading CIA opacities\n");
+    //cleanup_cia_cache(); // Clear any existing cache
     readcia();
-    planckmeanCIA();
-    
-    printf("CIA mean opacity in the infrared calculated!\n");
-    
-//clock_gettime(CLOCK_REALTIME, &tstart);
-    
-//clock_gettime(CLOCK_REALTIME, &tend);
-//t_passed = ((double)tend.tv_sec*1e9 + tend.tv_nsec) - ((double)tstart.tv_sec*1e9 + tstart.tv_nsec);
-//printf("\n%s %f\n","reading ONE opacity file took [ms]:", t_passed/1e6); 
-    
+    //planckmeanCIA();
     //Reading all opacity files
     printf("Reading all opacity files\n");
     read_all_opacities();
-    
-//clock_gettime(CLOCK_REALTIME, &tend);
-//t2_passed = ((double)tend.tv_sec*1e9 + tend.tv_nsec) - ((double)tstart.tv_sec*1e9 + tstart.tv_nsec);
-//printf("\n%s %f\n","reading ALL opacity files took [ms]:", t2_passed/1e6); 
+    //########################################################################################
 
-    printf("%s\n\n",fillmi); 
-    /* Print Out Initialization */
+
+    /* Print Out chem equilibrium */
     strcpy(outstdt,dirroute);
     strcat(outstdt,"/ConcentrationSTD_T.dat");
-    printf("%s\t%s\n","Prepare to print out thermal STD file to", outstdt);
     printout_std_t(z,outstdt);
-    
-    /* New Temperature - Initialization */
     strcpy(outnewtemp,dirroute);
     strcat(outnewtemp,"/NewTemperature.dat"); //ms2021: "/" removed
-    printf("%s\t%s\n","Prepare to print out new temperature to", outnewtemp);
-    
-    /* New Temperature - Initialization */
     strcpy(outrtdiag,dirroute);
     strcat(outrtdiag,"/Diagnostic_RT.dat"); //ms2021: "/" removed
-    printf("%s\t%s\n","Prepare to print out RT diagnostics to", outrtdiag);
-    
-    /* New Temperature - Initialization */
     strcpy(outrcdiag,dirroute);
     strcat(outrcdiag,"/Diagnostic_RC.dat"); //ms2021: "/" removed
-    printf("%s\t%s\n","Prepare to print out RC diagnostics to", outrcdiag);
-    
-    /* New Temperature - Initialization */
     strcpy(outcondiag,dirroute);
     strcat(outcondiag,"/Diagnostic_condens.dat"); //ms2021: "/" removed
-    printf("%s\t%s\n","Prepare to print out condensibles diagnostics to", outcondiag);
-    
     printf("%s\n\n",fillmi); 
-//exit(0);//ms: for testing purposes
 
+    
+    // Start timing for radiative solver
     if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET); 
     
     if(RadConv_Solver == 1) {
@@ -1073,7 +935,6 @@ printf("%s\n\n",fillmi);
 //**************************************************************
     /* Iteration */
 //**************************************************************
-    //Total number of iterations for climate-chemistry
     for (i=0; i<NMAX; i++) {
         
         /* Determine if converged */
@@ -1085,8 +946,8 @@ printf("%s\n\n",fillmi);
         printf("%s %f %s\n", "Temperature variation is ", TVARTOTAL, "K");
         
         /* Check convergence */
-        if (TVARTOTAL<Tol_RC_T) {
-            printf("%s\n", "EPACRIS converged with temperature variation!");
+        if (TVARTOTAL<1.0) {
+            printf("%s\n", "EPACRIS converged!");
             /* fprintf(fstat,"%s\n", "converged!");*/
             printout_std_t(z,outstdt);
             break;
@@ -1119,12 +980,9 @@ printf("%s\n\n",fillmi);
         for (j=1; j<=zbin; j++) {
             MM[j]=pl[j]/KBOLTZMANN/tl[j]*1.0E-6; /*unit: Molecule cm-3*/
             MMdoub[2*j-1] = MM[j]; //ms2023: double grid
-            printf("%lf %lf %lf %e\n", zl[j], pl[j], tl[j], MM[j]);
+            //printf("%lf %lf %lf %e\n", zl[j], pl[j], tl[j], MM[j]);
         }
-        /* Print out */
-        printout_std_t(z,outstdt);
 
-        printf("%s\n", "The Z-T-P profile is re-calculated.");
         
         /* Re-calculate the initial mixing ratio from chemical equilibrium  */
         //if (IMODE==0 || IMODE==4) {
@@ -1171,124 +1029,14 @@ printf("%s\n\n",fillmi);
             printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer", j, "is", meanmolecular[j]);
             printf("%s %d %s %2.2e\n","Helium mixing ratio at layer", j, "is", heliumnumber/totalnumber);
         }
-        
-        /* Update Opacities */
 
-        printf("%s\n", "Updating Opacities!!!");
 
-        readcia();
-        planckmeanCIA();
-        printf("CIA mean opacity in the infrared calculated!\n");
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacCO2.dat");
-        readcross(crossfile, opacCO2);
-        planckmean(MeanCO2, SMeanCO2, opacCO2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacO2.dat");
-        readcross(crossfile, opacO2);
-        planckmean(MeanO2, SMeanO2, opacO2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacSO2.dat");
-        readcross(crossfile, opacSO2);
-        planckmean(MeanSO2, SMeanSO2, opacSO2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacH2O.dat");
-        readcross(crossfile, opacH2O);
-        planckmean(MeanH2O, SMeanH2O, opacH2O);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacOH.dat");
-        readcross(crossfile, opacOH);
-        planckmean(MeanOH, SMeanOH, opacOH);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacH2CO.dat");
-        readcross(crossfile, opacH2CO);
-        planckmean(MeanH2CO, SMeanH2CO, opacH2CO);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacH2O2.dat");
-        readcross(crossfile, opacH2O2);
-        planckmean(MeanH2O2, SMeanH2O2, opacH2O2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacHO2.dat");
-        readcross(crossfile, opacHO2);
-        planckmean(MeanHO2, SMeanHO2, opacHO2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacH2S.dat");
-        readcross(crossfile, opacH2S);
-        planckmean(MeanH2S, SMeanH2S, opacH2S);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacCO.dat");
-        readcross(crossfile, opacCO);
-        planckmean(MeanCO, SMeanCO, opacCO);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacO3.dat");
-        readcross(crossfile, opacO3);
-        planckmean(MeanO3, SMeanO3, opacO3);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacCH4.dat");
-        readcross(crossfile, opacCH4);
-        planckmean(MeanCH4, SMeanCH4, opacCH4);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacNH3.dat");
-        readcross(crossfile, opacNH3);
-        planckmean(MeanNH3, SMeanNH3, opacNH3);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacC2H2.dat");
-        readcross(crossfile, opacC2H2);
-        planckmean(MeanC2H2, SMeanC2H2, opacC2H2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacC2H4.dat");
-        readcross(crossfile, opacC2H4);
-        planckmean(MeanC2H4, SMeanC2H4, opacC2H4);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacC2H6.dat");
-        readcross(crossfile, opacC2H6);
-        planckmean(MeanC2H6, SMeanC2H6, opacC2H6);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacCH2O2.dat");
-        readcross(crossfile, opacCH2O2);
-        planckmean(MeanCH2O2, SMeanCH2O2, opacCH2O2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacHCN.dat");
-        readcross(crossfile, opacHCN);
-        planckmean(MeanHCN, SMeanHCN, opacHCN);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacNO.dat");
-        readcross(crossfile, opacNO);
-        planckmean(MeanNO, SMeanNO, opacNO);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacNO2.dat");
-        readcross(crossfile, opacNO2);
-        planckmean(MeanNO2, SMeanNO2, opacNO2);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacHNO3.dat");
-        readcross(crossfile, opacHNO3);
-        planckmean(MeanHNO3, SMeanHNO3, opacHNO3);
-        
-        strcpy(crossfile,CROSSHEADING);
-        strcat(crossfile,"opacOCS.dat");
-        readcross(crossfile, opacOCS);
-        planckmean(MeanOCS, SMeanOCS, opacOCS);
+        //planckmeanCIA();
+        printf("Reinterpolating opacities\n");
+        //cleanup_cia_cache();      // Clean up any existing CIA opacity cache
+        //readcia();                // Read CIA opacity data
+        //reinterpolate_all_cia_opacities(); // Reinterpolate CIA opacities
+        //reinterpolate_all_opacities();     // Reinterpolate normal opacities
         
         /* New Temperature */
         if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET);
@@ -1299,12 +1047,19 @@ printf("%s\n\n",fillmi);
         }
         
     }
+
+        /* Print out */
+    printout_std_t(z,outstdt);
+
+    printf("%s\n", "The Z-T-P profile is re-calculated.");
     
 //**************************************************************
     /* fprintf(fstat,"%s %f\n", "Temperature variation is", TVARTOTAL);
     fclose(fstat); */
     
     /* Clean up */
+    cleanup_opacity_cache();  // Add this line before other cleanup
+    cleanup_cia_cache();      // Clean up CIA opacity cache
     
     free_dmatrix(opacCO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacO2,1,zbin,0,NLAMBDA-1);
@@ -1329,7 +1084,6 @@ printf("%s\n\n",fillmi);
     free_dmatrix(opacH2S,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacSO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacOCS,1,zbin,0,NLAMBDA-1);
-    
 
     /* Clean up */
     free_dmatrix(cross,1,nump,0,NLAMBDA-1);
@@ -1337,26 +1091,24 @@ printf("%s\n\n",fillmi);
     free_dmatrix(crosst,1,nump,0,NLAMBDA-1);
     free_dmatrix(qyt,1,nump,0,NLAMBDA-1);
 
-
 	
 //=== END: MAIN PROGRAM ==================================
 //TRANSFER gattaca output into folder:
 //printf("%s\n","IS THIS EXECUTED?");
-if (argc > 1)
-{
-    //printf("%s\n","AND THIS?");
-    char cmd[500];
-    char * jobid = strtok(argv[1],".");
-    sprintf(cmd,"%s %s%s%s %s%s","mv",argv[2],".o",jobid,OUT_DIR,"/" );
-    system(cmd);
-    //now archive input file
-    sprintf(cmd,"%s%s %s%s%s%s%s","cp Input/",IN_FILE_NAME,OUT_DIR,"/",jobid,"_",IN_FILE_NAME );
-    system(cmd);
+// if (argc > 1)
+// {
+//     //printf("%s\n","AND THIS?");
+//     char cmd[500];
+//     char * jobid = strtok(argv[1],".");
+//     sprintf(cmd,"%s %s%s%s %s%s","mv",argv[2],".o",jobid,OUT_DIR,"/" );
+//     system(cmd);
+//     //now archive input file
+//     sprintf(cmd,"%s%s %s%s%s%s%s","cp Input/",IN_FILE_NAME,OUT_DIR,"/",jobid,"_",IN_FILE_NAME );
+//     system(cmd);
 
-    //printf("%s\n","OR THAT?");
+//     //printf("%s\n","OR THAT?");
+// }
+//========================================================
 }
 //========================================================
-}
 //========================================================
-//========================================================
-

@@ -22,11 +22,17 @@
 #include "ms_radtrans_test.c"
 #include "ms_conv_funcs.c"
 
+// Add these declarations after your #include statements
+// but before your ms_Climate function
+extern void reinterpolate_all_cia_opacities();
+extern void reinterpolate_all_opacities();
+
 void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outnewtemp[],char outrtdiag[],char outrcdiag[],char outcondiag[]);
 
 void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outnewtemp[],char outrtdiag[],char outrcdiag[],char outcondiag[])
 {
     int i,j,k,radcount,jabove,iconden;
+    int ispec; // for species loops in live plotting
     
     /* Initial profile */
     double tempb[zbin+1], tempbnew[zbin+1], tempc[zbin+1];
@@ -35,7 +41,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 		//tempb[j] = Tdoub[2*j]; //bottom-up!
 	}
 
-   /* Helium calculation */ 
+   /* Helium calculation 
+   The left over mass in the atmosphere is assumed to be helium.
+   If The value is negative, it is set to zero.
+   Repetitive computation? or for iteration purposes?*/ 
     double heliumnumber[zbin+1];
     for (j=1; j<=zbin; j++) {
         heliumnumber[j] = MM[j];
@@ -75,12 +84,60 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
     Rflux = dvector(0,nrl);
 
+
+//#########################################################
+// For live plotting debugging
+//#########################################################
+    int total_step_count = 0; //for live plot, to keep persistence
+    // Create live_plot directory path
+    char live_plot_dir[1024];
+    sprintf(live_plot_dir, "%slive_plot/", OUT_DIR);
+    
+    // Create the live_plot directory if it doesn't exist
+    char mkdir_cmd[1100];
+    #ifdef _WIN32
+        sprintf(mkdir_cmd, "mkdir \"%s\" 2>nul", live_plot_dir);
+    #else
+        sprintf(mkdir_cmd, "mkdir -p \"%s\" 2>/dev/null", live_plot_dir);
+    #endif
+    system(mkdir_cmd);
+
+    char python_command[2048]; // Increased from 256 to 2048 to prevent buffer overflow
+
+    //  // Create Python plotting script
+    // FILE *py = fopen("plot_scripts/live_plot.py", "w");
+    // fprintf(py, "import matplotlib.pyplot as plt\n");
+    // fprintf(py, "import numpy as np\n");
+    // fprintf(py, "import os\n");
+    // fprintf(py, "import sys\n\n");
+    // fprintf(py, "# Get step count and output directory from command line arguments\n");
+    // fprintf(py, "total_step_count = int(sys.argv[1])\n");
+    // fprintf(py, "live_plot_dir = sys.argv[2]\n\n");
+    // fprintf(py, "# Load data\n");
+    // fprintf(py, "data = np.loadtxt('plot_scripts/temp_data.txt')\n");
+    // fprintf(py, "t_new = data[:, 0]\n");
+    // fprintf(py, "pressure = data[:, 1]  # Pressure in bar\n\n");
+    // fprintf(py, "# Create plot\n");
+    // fprintf(py, "plt.figure(figsize=(8, 6))\n");
+    // fprintf(py, "plt.plot(t_new, pressure, 'k-', linewidth=3, label='Temperature')\n");
+    // fprintf(py, "plt.yscale('log')\n");
+    // fprintf(py, "plt.ylim(max(pressure), min(pressure))\n");
+    // fprintf(py, "plt.xlim(0, 1000)\n");
+    // fprintf(py, "plt.xlabel('Temperature (K)')\n");
+    // fprintf(py, "plt.ylabel('Pressure (Bar)')\n");
+    // fprintf(py, "plt.title(f'Temperature-Pressure Profile (Step {total_step_count})')\n");
+    // fprintf(py, "plt.legend()\n\n");
+    // fprintf(py, "# Save figure\n");
+    // fprintf(py, "plt.savefig(f'{live_plot_dir}TP_profile_step_{total_step_count}.png')\n");
+    // fprintf(py, "plt.close()\n");
+    // fclose(py);
+
 //*************************************************************
 // main iterative Rad-Conv loop:
 //*************************************************************
     for (i=1; i<=NMAX_RC; i++) {
         
-        if (i % PRINT_ITER == 0) {  // Only print every 100 iterations
+        if (i % PRINT_ITER == 0) {  // Only print every PRINT_ITER iterations
             printf("%s\n",filleq);
             printf("%s %d\n", "Rad-Conv loop i = ", i);
             printf("%s\n",filleq);
@@ -96,9 +153,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
         ncl=0;nrl=zbin; //Allways run RT in full grid
 
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //Radiative Transfer iteration
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //Radiative Transfer iteration
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         int pevery=20, pcount=0;//Added for printing every few steps
         double Tsaved[zbin+1];
         int saveevery=20; //save Told every n steps for dt progression
@@ -113,59 +170,67 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         for (j=0;j<=zbin;j++) Tsaved[j] = tempb[j]; //store T for dt progression
         for (j=0;j<=zbin;j++) isequil[j] = 0; //store T for dt progression
 
-        //while ( (((Rfluxmax >= Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax >= Tol_RC)) || RTstepcount==0 || sumisequil < zbin) && RTstepcount<RTsteplimit && access(RTstopfile, F_OK) !=0 ) { 
-        //sumisequil is not defined yet for jacobian; also not a reliable proxi yet for convergeance in time stepping
-        while ( (((Rfluxmax >= Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax >= Tol_RC)) || RTstepcount==0) && RTstepcount<RTsteplimit && access(RTstopfile, F_OK) !=0 ) { 
+        // Write initial profile for live plot before radiative loop
+        FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
+        // Write header with all species numbers
+        fprintf(temp_data, "# Temperature Pressure");
+        for (ispec=1; ispec<=NSP; ispec++) {
+            fprintf(temp_data, " %d", ispec);
+        }
+        fprintf(temp_data, "\n");
+        for (j=zbin; j>=0; j--) {
+            fprintf(temp_data, "%f %e", tempb[j], P[j]/1e5);
+            for (ispec=1; ispec<=NSP; ispec++) {
+                fprintf(temp_data, " %e", xx[j][ispec]/MM[j]);
+            }
+            fprintf(temp_data, "\n");
+        }
+        fclose(temp_data);
+        sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s", total_step_count, live_plot_dir);
+        system(python_command);
+
+        while ((((Rfluxmax >= Tol_RC_R * SIGMA * pow(Tint, 4.0)) || (Rfluxmax >= Tol_RC)) || RTstepcount == 0) && RTstepcount < RTsteplimit && access(RTstopfile, F_OK) != 0) { 
         //while ( (((Rfluxmax >= Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax >= Tol_RC)) || RTstepcount==0 ) && rtstepcount<1000 ) { 
         //while (rcount<=NMAX_RC ) { 
             RTstepcount +=1;
             pcount +=1;
             sumisequil=0;
+
+            // Reinterpolation of opacities here, before RadTrans is called
+            if (RTstepcount % 10 == 0) {
+                reinterpolate_all_cia_opacities();
+                reinterpolate_all_opacities();
+            }
+
             ms_RadTrans(Rflux, tempbnew, P, ncl, isconv, lapse, tempb, Tint, cp, dt, isequil);
+            total_step_count++; //for live plot, keeps persistence
+            
+            
+            // Live plotting and print status every PRINT_ITER steps
+            if (total_step_count % PRINT_ITER == 0) {
+                // Create temporary data file for plotting
+                FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
 
-            // Print status 
-            if (RTstepcount % PRINT_ITER == 0) {
-                // Create live_plot directory if it doesn't exist
-                system("mkdir -p live_plot");
-                
-                // Create temporary data file for gnuplot
-                FILE *temp_data = fopen("live_plot/temp_data.txt", "w");
+                // Write header with all species numbers
+                fprintf(temp_data, "# Temperature Pressure");
+                for (ispec=1; ispec<=NSP; ispec++) {
+                    fprintf(temp_data, " %d", ispec);
+                }
+                fprintf(temp_data, "\n");
+
                 for (j=zbin; j>=0; j--) {
-                    // Write both T_new and T_old, P/1e6 for bars to MPa conversion
-                    fprintf(temp_data, "%f %f %e\n", tempbnew[j], tempb[j], P[j]/1e5);
+                    fprintf(temp_data, "%f %e", tempbnew[j], P[j]/1e5);
+                    for (ispec=1; ispec<=NSP; ispec++) {
+                        fprintf(temp_data, " %e", xx[j][ispec]/MM[j]);  // Convert to mixing ratio
+                    }
+                    fprintf(temp_data, "\n");
                 }
+
                 fclose(temp_data);
-                
-                // Extract directory path from outnewtemp
-                char output_dir[1024];
-                strncpy(output_dir, outnewtemp, sizeof(output_dir) - 1);
-                output_dir[sizeof(output_dir) - 1] = '\0'; // Ensure null termination
 
-                // Find the last occurrence of '/' to get the directory path
-                char *last_slash = strrchr(output_dir, '/');
-                if (last_slash != NULL) {
-                    *(last_slash + 1) = '\0'; // Terminate the string at the last slash
-                } else {
-                    strcpy(output_dir, "./"); // Default to current directory if no slash is found
-                }
-
-                // Create gnuplot script
-                FILE *gp = fopen("live_plot/plot_script.gp", "w");
-                fprintf(gp, "set terminal png size 800,600\n");
-                fprintf(gp, "set output '%sTP_profile_step_%d.png'\n", output_dir, RTstepcount);
-                fprintf(gp, "set logscale y\n");
-                fprintf(gp, "set yrange [200:1e-8] reverse\n");
-                fprintf(gp, "set xrange [800:3200]\n");
-                fprintf(gp, "set xlabel 'Temperature (K)'\n");
-                fprintf(gp, "set ylabel 'Pressure (Bar)'\n");
-                fprintf(gp, "set title 'Temperature-Pressure Profile (Step %d)'\n", RTstepcount);
-                fprintf(gp, "set grid\n");
-                fprintf(gp, "plot 'live_plot/temp_data.txt' using 1:3 with lines lw 3 lc rgb 'black' title 'T_{new}', \\\n");
-                fprintf(gp, "     'live_plot/temp_data.txt' using 2:3 with lines lw 3 dt 2 lc rgb 'red' title 'T_{old}'\n");
-                fclose(gp);
-                
-                // Execute gnuplot
-                system("gnuplot live_plot/plot_script.gp");
+                // Execute Python script with step count argument
+                sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s", total_step_count, live_plot_dir);
+                system(python_command);
                 
                 // Print status
                 printf("%s %d\n", "Radiative loop RTstepCount = ", RTstepcount);
@@ -188,14 +253,18 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                     Tsaved[j] = tempb[j];
                 }
             }
+
+
+            // Updating temperature profile for boundary and mid-point layers
             for (j=0; j<=zbin; j++) tempb[j]=tempbnew[j];
             for (j=1; j<=zbin; j++) tl[j] = 0.5* (tempb[j]+tempb[j-1]);
 
+            // Calculating max radiative flux and its gradient for convergence check
             Rfluxmax=0.0;
             dRfluxmax=0.0;
             radcount = 0;
             for (k=1; k<=zbin; k++) {
-                if (isconv[k] == 0) {
+                if (isconv[k] == 0) { //only continue if layer is radiative
                     radcount += 1;
                     Rfluxmax = fmax(Rfluxmax,fabs(Rflux[radcount]));
                     dRfluxmax = fmax(dRfluxmax,fabs((Rflux[radcount-1] - Rflux[radcount])));
@@ -208,13 +277,37 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 printf("%s\n",filleq);
             }
 
-            if ( (Rfluxmax < Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax < Tol_RC) || (dRfluxmax < 0.2*Tol_RC)  ) {
+            // Convergence check!!! Convergence is reached if:
+            // 1. The max radiative flux is less than the tolerance times the blackbody flux at the surface temperature
+            // 2. The max radiative flux is less than the tolerance
+            // 3. The max gradient of the radiative flux is less than 20% of the tolerance
+            // 4. The number of radiative steps is greater than the limit
+            if ( (Rfluxmax < Tol_RC_R * SIGMA*pow(Tint,4.0))  || (Rfluxmax < Tol_RC) || (dRfluxmax < 0.2*Tol_RC) || (RTstepcount >= RTsteplimit) ) {
                 //if(sumisequil>=zbin){ //ms23: needs fine tuning before it can be used
                     printf("Radiative transfer done\n");
+                    /* Generate final plot */
+                    FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
+                    // Write header with all species numbers
+                    fprintf(temp_data, "# Temperature Pressure");
+                    for (ispec=1; ispec<=NSP; ispec++) {
+                        fprintf(temp_data, " %d", ispec);
+                    }
+                    fprintf(temp_data, "\n");
+                    for (j=zbin; j>=0; j--) {
+                        fprintf(temp_data, "%f %e", tempbnew[j], P[j]/1e5);
+                        for (ispec=1; ispec<=NSP; ispec++) {
+                            fprintf(temp_data, " %e", xx[j][ispec]/MM[j]);  // Convert to mixing ratio
+                        }
+                        fprintf(temp_data, "\n");
+                    }
+                    fclose(temp_data);
+                    sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s", total_step_count, live_plot_dir);
+                    system(python_command);
                     break;
                // }
             }
 
+            // Print-out new TP profile every pevery steps
             if (pcount = pevery)
             {
                 /* Print-out new TP profile*/
@@ -232,28 +325,32 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 fclose(frt);
                 //pcount = 0; nneded for convection later
             }
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        } //ms22: END of radiative transfer iteration
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+            //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        }   //ms22: END of radiative transfer iteration
+            //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+        // Check if RTstopfile exists and abort if it does (Not sure what this is for)
         if(access(RTstopfile, F_OK )==0) printf("\n\n%s\n\n","===== RTstopfile found. RT loop aborted! =====");
 
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //ms22: convective adjustment iteration:
-    //needed to avoid temperature jumps at upper/lower tails of convective regions 
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //ms22: convective adjustment iteration:
+        //needed to avoid temperature jumps at upper/lower tails of convective regions 
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        deltaconv = zbin; //for convective adjustment iteration
-        while (deltaconv > 0) 
+        deltaconv = zbin; //start with all layers convective
+        while (deltaconv > 0) // continue until no convective layers are found
         {
-            for (j=1; j<=zbin; j++) {pot_temp[j] = 0.0; ncreg[j] = 0;} 
+            for (j=1; j<=zbin; j++) {
+                pot_temp[j] = 0.0; //reset potential temperature
+                ncreg[j] = 0; //reset convective region
+            } 
             /* heat capacity and laspe rate */
             for (j=1; j<=zbin; j++) 
             {
                 ms_adiabat(j,lapse,heliumnumber[j],&cp[j]); //calculate appropriate lapse rate depending on dry, moist, and condensate conditions
                 
                 //need to propagate cold traps upwards
-                /* if (j<zbin) {
+                if (j<zbin) {
                     for (jabove=j+1; jabove<=zbin; jabove++) {
                         for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
                             if (xx[jabove][CONDENSIBLES[iconden]]/MM[jabove] > xx[j][CONDENSIBLES[iconden]]/MM[j]) {
@@ -261,7 +358,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                             }
                         }
                     }
-                } */
+                } 
                 
                 //check for clouds
                 nclouds[j] = 0;
@@ -278,16 +375,17 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
             if(CONVEC_ADJUST==0)
             {
-                for (j=zbin; j>=1; j--) {
-                    //if ( tempb[j-1] >= (tempb[j] * pow(P[j-1]/P[j],lapse[j]) * 0.999999) ) {
+                for (j=zbin; j>=1; j--) {  // Loop from top of atmosphere down
+                    // Check if temperature gradient exceeds adiabatic lapse rate
                     if ( i!=1 && (tempb[j-1] >= (tempb[j] * pow(P[j-1]/P[j],lapse[j]) * 0.98)) ) {
                     //if ( tempb[j-1] >= (tempb[j] * pow(P[j-1]/P[j],lapse[j]) * 0.95) ) {
-                        tempb[j-1] = tempb[j] * pow(P[j-1]/P[j],lapse[j]); //ms2022: moved down to include manually modded layers
-                        isconv[j] = 1;
-                        ncl = ncl+1;
+                        // If layer is too warm compared to layer above (unstable)
+                        tempb[j-1] = tempb[j] * pow(P[j-1]/P[j],lapse[j]); // Adjust temperature to adiabatic profile
+                        isconv[j] = 1;  // Mark layer as convective
+                        ncl = ncl+1;    // Count convective layers
                     } else {
-                        isconv[j] = 0;
-                        nrl = nrl+1;
+                        isconv[j] = 0;  // Mark layer as radiative
+                        nrl = nrl+1;    // Count radiative layers
                     }
                 }
             } //END: CONVEC_ADJUST=0
@@ -324,6 +422,32 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
             if(CONVEC_ADJUST==1 && ncl>=0) ms_temp_adj(tempb, P, lapse, isconv, cp, ncreg, pot_temp); //ms22: assign convective regimes, adjust temperatures
 
+            // Add live plotting during convection - plot at every step since there are few convective steps
+            total_step_count++; // Increment step count for live plot
+
+            // Create temporary data file for plotting
+            FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
+            // Write header with all species numbers
+            fprintf(temp_data, "# Temperature Pressure");
+            for (ispec=1; ispec<=NSP; ispec++) {
+                fprintf(temp_data, " %d", ispec);
+            }
+            fprintf(temp_data, "\n");
+            for (j=zbin; j>=0; j--) {
+                fprintf(temp_data, "%f %e", tempb[j], P[j]/1e5);  // Use tempb instead of tempeq since we're not smoothing here
+                for (ispec=1; ispec<=NSP; ispec++) {
+                    fprintf(temp_data, " %e", xx[j][ispec]/MM[j]);  // Convert to mixing ratio
+                }
+                fprintf(temp_data, "\n");
+            }
+            fclose(temp_data);
+
+            // Execute Python script with step count argument
+            sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s", total_step_count, live_plot_dir);
+            system(python_command);
+            
+            printf("%s %d\n", "Convection step count = ", total_step_count);
+
             //ms22: check if convective regions were fully addressed:
             deltaconv = 0;
             for (j=1;j<=zbin;j++)
@@ -338,6 +462,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         
         /* hydrostatic equilibrium */
+        printf("=== Computing hydrostatic equilibrium ===\n");
         znew[0]=0.0;
         for (j=1; j<=zbin; j++) {
             tempc[j] = (tempb[j]+tempb[j-1])/2.0;
@@ -348,15 +473,17 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             Tdoub[2*j-1] = tempc[j];
         }
         Tdoub[0] = tempb[0];
-        printf("%s %d %s %d\n", "conv layer", ncl, "rad layer", nrl);
+
+        printf("=== Convective layer diagnostics ===\n");
+        printf("%s %d %s %d\n", "Number of convective layers", ncl, "Number of radiative layers", nrl);
         /* compare old and new RC boundary */
         isconv_sum=0;
         for (j=1; j<=zbin; j++) {
             isconv_sum += abs(isconv_old[j]-isconv[j]);
         }
-        printf("%s %d\n", "change in convective layer is", isconv_sum);
+        printf("%s %d\n", "Change in convective layer is", isconv_sum);
 
-        if (pcount = pevery)
+        if (pcount = PRINT_ITER)
         {
         //ms23: print convection diagnostics
             FILE *frc,*fcon;
@@ -379,9 +506,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             pcount = 0;
         }
 
-   //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    //ms22: smoothing temperature profile
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // Smooth temperature profile
+        printf("=== Smoothing temperature profile ===\n");
         for (j=1; j<zbin; j++) tempeq[j] = tempb[j-1]/3. + tempb[j]/3. + tempb[j+1]/3.;
         //ms23: different smoothing for TOA and BOA
         tempeq[0] = tempeq[1] + 1.0/3.0 * (tempeq[1] - tempeq[4]); //trend of smoothed T 1 through T 4
@@ -390,9 +516,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         //tempeq[zbin] = tempb[zbin-1]/2. + tempb[zbin]/2.; //TOA
         
         for (j=1; j<=zbin; j++) tl[j] = 0.5* (tempb[j]+tempb[j-1]);
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    // DETERMINE IF CONVERGED
-    //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+        // DETERMINE IF CONVERGED
         if (isconv_sum == 0 && i!=1 && sumisequil>=zbin) {
             printf("%s\n",filleq);
             printf("Climate converged\n");

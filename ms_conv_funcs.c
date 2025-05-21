@@ -18,6 +18,12 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 //=== Helper function identifiers =========================
 double ms_psat_h2o(double temp); //calc saturation pressure of water
 double ms_psat_nh3(double temp); //calc saturation pressure
+double ms_psat_co(double temp); //calculate saturation pressure of carbon monoxide
+double ms_psat_ch4(double temp); //calculate saturation pressure of methane
+double ms_psat_co2(double temp); //calculate saturation pressure of carbon dioxide
+double ms_psat_h2(double temp); //calculate saturation pressure of hydrogen
+double ms_psat_o2(double temp); //calculate saturation pressure of oxygen
+double ms_psat_n2(double temp); //calculate saturation pressure of nitrogen
 double ms_latent(int mol, double temp); //calc saturation pressure of water
 
 //=========================================================
@@ -41,28 +47,37 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     //LOCAL parameters
     int i,j;
 //input file    int NCONDENSIBLES = 1; //number of potential condensibles; here H2O
+
+    //variables for adiabatic calculation
+    double Xd,cp_d; //mole fraction of non-condensible gas, heat capacity of non-condensible gas
+    double Xv[NCONDENSIBLES],Xvold,cp_v[NCONDENSIBLES]; //condensibles mol fractions in vapor form and heat cap. [Xvold is the old value of Xv]
+    double Xc[NCONDENSIBLES],cp_c[NCONDENSIBLES]; //condensibles fractions in condensed form (Xc) and heat cap. (cp_c)
+    double alpha[NCONDENSIBLES]; // condensate mole fraction (1 - rain-out) --- assigned with heat capacities
+    double beta[NCONDENSIBLES], latent[NCONDENSIBLES]; // Latent heat and B=L/RT for each condensible
+
+    //variables for condensation
     double psat[NCONDENSIBLES]; //saturation pressures
     int saturated[NCONDENSIBLES]; //check which molecules are available for condensation
     double dp[NCONDENSIBLES]; //condensed fraction
-    double beta[NCONDENSIBLES], latent[NCONDENSIBLES]; // L/RT for each condensible
+
     double cpxx; //cp * xx for all dry species for the cp_d calculation
     double MM_cp; // MM for all species we have a cp for
-    double Xd,cp_d; //non-condensible gas, mol frac and heat capa.
-    double Xv[NCONDENSIBLES],Xvold,cp_v[NCONDENSIBLES]; //condensibles mol fractions in vapor form and heat cap.
-    double Xc[NCONDENSIBLES],cp_c[NCONDENSIBLES]; //condensibles fractions in condensed form
-    double alpha[NCONDENSIBLES]; // condensate retention fraction (1 - rain-out) --- assigned with heat capacities
+
     double reservoirs[NCONDENSIBLES]; //keeping track of what was rained out + was available at surface at beginning
 
-    double lapse_num, lapse_denom;
-    double cp_num, cp_denom;
-    double sum_beta_xv, big_sum_denom_num;
+    double lapse_num, lapse_denom; //numerator and denominator of lapse rate
+    double cp_num, cp_denom; //numerator and denominator of heat capacity
+    double sum_beta_xv, big_sum_denom_num; //sum of beta*Xv and big sum of denominator of lapse rate
     
     //START function
-    //Assign mol fractions:
+    //print number of condensibles species
     if(lay==1) printf("%s\n","--- Adiabat calculation ---");
-    Xd = 1.0;
-    cp_d = 0.0;
-    if(lay==1) printf("%s\t%d\n","NCONDENSIBLES = ",NCONDENSIBLES);
+    if(lay==1) printf("%s\t%d\n","Number of condensibles species:",NCONDENSIBLES);
+
+    Xd = 1.0; //mole fraction of non-condensible gas
+    cp_d = 0.0; //heat capacity of non-condensible gas
+
+    //Assign mol fractions:
     for (i=0; i<NCONDENSIBLES; i++)
     {
         if(lay==1) printf("%s%d%s\t%d\n","CONDENSIBLE[",i,"] = ",CONDENSIBLES[i]);
@@ -71,15 +86,47 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         //Xc[i] = 0.0; //no preexisting clouds taken into account
         Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles
 
-//        if(lay==1) printf("%s%d%s\t%e\n","Xv[",i,"] = ",Xv[i]);
-        if(CONDENSIBLES[i]==7) psat[i] = ms_psat_h2o(tl[lay]);
-        if(CONDENSIBLES[i]==9) psat[i] = ms_psat_nh3(tl[lay]);
+
+        //if(lay==1) printf("%s%d%s\t%e\n","Xv[",i,"] = ",Xv[i]); (debugging)
+
+        //calculate saturation pressure for each condensible species
+        if(CONDENSIBLES[i]==7) psat[i] = ms_psat_h2o(tl[lay]);  // Condenses ~273K (liquid), ~180K (ice)
+        if(CONDENSIBLES[i]==9) psat[i] = ms_psat_nh3(tl[lay]);  // Condenses ~195K (triple point)
+
+        // These are added and not checked for sources
+        if(CONDENSIBLES[i]==20) psat[i] = ms_psat_co(tl[lay]);  // Condenses ~68K (triple point)
+        if(CONDENSIBLES[i]==21) psat[i] = ms_psat_ch4(tl[lay]); // Condenses ~90K (triple point)
+        if(CONDENSIBLES[i]==52) psat[i] = ms_psat_co2(tl[lay]); // Condenses ~195-216K (dry ice)
+        if(CONDENSIBLES[i]==53) psat[i] = ms_psat_h2(tl[lay]);  // Condenses ~14K (triple point)
+        if(CONDENSIBLES[i]==54) psat[i] = ms_psat_o2(tl[lay]);  // Condenses ~54K (triple point)
+        if(CONDENSIBLES[i]==55) psat[i] = ms_psat_n2(tl[lay]);  // Condenses ~63K (triple point)
+
+        /* Additional species that could be included:
+        if(CONDENSIBLES[i]==43) psat[i] = ms_psat_so2(tl[lay]);  // Condenses ~198K (triple point)
+        if(CONDENSIBLES[i]==45) psat[i] = ms_psat_h2s(tl[lay]);  // Condenses ~188K (triple point)
+        if(CONDENSIBLES[i]==99) psat[i] = ms_psat_s8(tl[lay]);   // Condenses ~388K (solid form)
+        if(CONDENSIBLES[i]==27) psat[i] = ms_psat_c2h2(tl[lay]); // Condenses ~192K (triple point)
+        if(CONDENSIBLES[i]==29) psat[i] = ms_psat_c2h4(tl[lay]); // Condenses ~104K (triple point)
+        if(CONDENSIBLES[i]==31) psat[i] = ms_psat_c2h6(tl[lay]); // Condenses ~90K (triple point)
+        if(CONDENSIBLES[i]==37) psat[i] = ms_psat_hcn(tl[lay]);  // Condenses ~260K (triple point)
+        if(CONDENSIBLES[i]==100) psat[i] = ms_psat_kcl(tl[lay]); // Condenses ~1000-1100K (hot Jupiters)
+        if(CONDENSIBLES[i]==101) psat[i] = ms_psat_nacl(tl[lay]); // Condenses ~1000-1100K (hot Jupiters)
+        if(CONDENSIBLES[i]==103) psat[i] = ms_psat_na2s(tl[lay]); // Condenses ~700-800K (hot Jupiters)
+        if(CONDENSIBLES[i]==104) psat[i] = ms_psat_mgsiO3(tl[lay]); // Condenses ~1500-1600K (very hot)
+        if(CONDENSIBLES[i]==105) psat[i] = ms_psat_mg2siO4(tl[lay]); // Condenses ~1600-1700K (very hot)
+        if(CONDENSIBLES[i]==106) psat[i] = ms_psat_fe(tl[lay]);  // Condenses ~1600-1700K (very hot)
+        if(CONDENSIBLES[i]==107) psat[i] = ms_psat_al2O3(tl[lay]); // Condenses ~1700-1800K (very hot)
+        */
+
+        //calculate condensation rate for each condensible species
         dp[i] = pl[lay]*Xv[i] - psat[i];
-//        if(lay==1 || dp[i]>0.0) printf("%s%d%s%e\t%s%d%s%e\n","pl[",lay,"] = ",pl[lay],"psat[",i,"] = ",psat[i]);
-        if(dp[i]>=0.0) 
+        //debugging if(lay==1 || dp[i]>0.0) printf("%s%d%s%e\t%s%d%s%e\n","pl[",lay,"] = ",pl[lay],"psat[",i,"] = ",psat[i]);
+       
+        if(dp[i]>=0.0) //if saturated, then add to clouds and reduce gas fraction
         {
-            Xc[i] += (1.0 - psat[i]/(pl[lay]*Xv[i]))*Xv[i];
-            Xvold = Xv[i];
+            Xc[i] += (1.0 - psat[i]/(pl[lay]*Xv[i]))*Xv[i]; //cloud fraction
+            Xvold = Xv[i]; //old vapor fraction
+            // adjust 
             Xv[i] *= psat[i]/(pl[lay]*Xv[i]); // here for surface layer: assumes "infinite" ocean reservoir for all condensibles
             printf("%s%d\t%s%d%s%e%s%e\t%s%d%s%e\n","Saturation in layer ",lay," Xv[",CONDENSIBLES[i],"] was ",Xvold, " now ",Xv[i]," Xc[",CONDENSIBLES[i],"] = ",Xc[i]);
         }
@@ -143,6 +190,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     cp_num = cp_d*Xd;
     cp_denom = Xd;
 
+    // Calculate adiabatic lapse rate
     for (i=0; i<NCONDENSIBLES; i++) 
     {
         lapse_num += Xv[i];
@@ -312,8 +360,29 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
     //if(isconv[1]) tempb[0] = potT[ncreg[1]] * (1 + 0.5 * (pow(P[0]/(P[1]),lapse[1]) - 1.0));
     // covered already above if(isconv[1]) tempb[0] = potT[ncreg[1]];
 
-    printf("%s\t%s\t\t%s\t\t%s\t%s\t%s\t%s\t%s\n","Layer","cp","lapse","isconv","Conv_Region","Pot_Temp","T_old","T_new");
-    for (i=zbin; i>=0; i--) {printf("%d\t%f\t%f\t%d\t%d\t\t%e\t%f\t%f\n",i,cp[i],lapse[i],isconv[i],ncreg[i], pot_temp[i], t_old[i], tempb[i]);}
+    //mantas debug print for conv_test
+    // printf("%s\t%s\t\t%s\t\t%s\t%s\t%s\t%s\t%s\n",
+    //     "Layer",      // Layer number (from top of atmosphere down)
+    //     "cp",         // Specific heat capacity
+    //     "lapse",      // Lapse rate (rate of temperature change with height)
+    //     "isconv",     // Is this layer convective? (1=yes, 0=no)
+    //     "Conv_Region", // Which convective region this layer belongs to
+    //     "Pot_Temp",   // Potential temperature
+    //     "T_old",      // Temperature before adjustment
+    //     "T_new"       // Temperature after adjustment
+    // );
+    // for (i=zbin; i>=0; i--) {
+    //     printf("%d\t%f\t%f\t%d\t%d\t\t%e\t%f\t%f\n",
+    //         i,            // Layer number
+    //         cp[i],        // Heat capacity for this layer
+    //         lapse[i],     // Lapse rate for this layer
+    //         isconv[i],    // Convective flag (1/0)
+    //         ncreg[i],     // Convective region number
+    //         pot_temp[i],  // Potential temperature (in scientific notation)
+    //         t_old[i],     // Old temperature
+    //         tempb[i]      // New temperature
+    //     );
+    // }
 
 //atexit(pexit);exit(0); //ms debugging mode
 }//END: void ms_temp_adj()
@@ -322,45 +391,39 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 
 //=========================================================
 //=== Helper Functions ====================================
-double ms_psat_h2o(double temp)
+
+double ms_psat_h2o(double temp) //calculate saturation pressure of water
 {
     double a,P;
     
-    //printf("%s%f\n","tl = ",tl);
     if (temp<273.16) 
     {
-	// over ice
-	// Formulation from Murphy & Koop (2005)
-	P = exp(9.550426-5723.265/temp+3.53068*log(temp)-0.00728332*temp); // [Pa] 
+        // over ice
+        // Formulation from Murphy & Koop (2005)
+        P = exp(9.550426-5723.265/temp+3.53068*log(temp)-0.00728332*temp); // [Pa] 
     }
-    //else if(tl<373.15) 
     else
     {
-	// over water
-	// Formulation from Seinfeld & Pandis (2006)
-	a = 1-373.15/temp;
-	P = 101325*exp(13.3185*a-1.97*a*a-0.6445*a*a*a-0.1229*a*a*a*a); // [Pa]
+        // over water
+        // Formulation from Seinfeld & Pandis (2006)
+        a = 1-373.15/temp;
+        P = 101325*exp(13.3185*a-1.97*a*a-0.6445*a*a*a-0.1229*a*a*a*a); // [Pa]
     }
-/*    else 
-    {
-        P = pow(10,8.14019-1810.94/(244.485+tl-273.15))*133.322387415;
-    }
-*/	
-    //printf("%s%f\n","Psat = ",*P);
+    
     return P;
-}// END: double ms_psat_h2o()
+}
+
 //*********************************************************
 //*********************************************************
-double ms_psat_nh3(double temp)
+double ms_psat_nh3(double temp) //calculate saturation pressure of ammonia
 {
     double P;
     
-    //printf("%s%f\n","tl = ",tl);
     if (temp<195.40) 
     {
-	// solid
-	// Formulation from Lodders, Fegley (1998)
-	P = pow(10.0,6.9-1588/temp) * 1.e+5; // [Pa] 
+        // solid
+        // Formulation from Lodders, Fegley (1998)
+        P = pow(10.0,6.9-1588/temp) * 1.e+5; // [Pa] 
     }
     else if(temp<300.00) 
     {
@@ -372,9 +435,158 @@ double ms_psat_nh3(double temp)
 	// undefined - set for unsaturated case
 	P = 1e+20; // [Pa]
     }
-    //printf("%s%f\n","Psat = ",*P);
     return P;
-}// END: double ms_psat_nh3()
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_co(double temp) //calculate saturation pressure of carbon monoxide
+{
+    double P;
+    
+    if (temp < 68.12) // below triple point
+    {
+        // solid CO
+        // From Fray & Schmitt (2009)
+        P = exp(26.97 - 764.2/temp) * 1.e+0; // [Pa]
+    }
+    else if (temp < 134.45) // between triple point and critical point
+    {
+        // liquid CO
+        // From Span & Wagner (1996)
+        P = exp(24.63 - 697.4/temp) * 1.e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_ch4(double temp) //calculate saturation pressure of methane
+{
+    double P;
+    
+    if (temp < 90.67) // below triple point
+    {
+        // solid methane
+        // From Fray & Schmitt (2009)
+        P = exp(27.48 - 1190.0/temp) * 1.e+0; // [Pa]
+    }
+    else if (temp < 190.44) // between triple point and critical point
+    {
+        // liquid methane
+        // From Goodwin (1974)
+        P = exp(27.1688 - 1022.9/temp) * 1.e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_co2(double temp) //calculate saturation pressure of carbon dioxide
+{
+    double P;
+    
+    if (temp < 216.54) // below triple point
+    {
+        // solid CO2 (dry ice)
+        // Based on Fray & Schmitt (2009)
+        P = exp(27.85 - 3182.4/temp) * 1.e+0; // [Pa]
+    }
+    else if (temp < 304.2) // between triple point and critical point
+    {
+        // liquid CO2
+        // From Span & Wagner (1996)
+        P = exp(35.34 - 2648.0/temp - 2.74*log(temp)) * 1.e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_h2(double temp) //calculate saturation pressure of hydrogen
+{
+    double P;
+    
+    if (temp < 13.95) // below triple point
+    {
+        // solid hydrogen
+        // From Roder et al. (1973)
+        P = exp(24.215 - 101.1/temp) * 1.e+0; // [Pa]
+    }
+    else if (temp < 33.2) // between triple point and critical point
+    {
+        // liquid hydrogen
+        // From Leachman et al. (2009)
+        P = exp(22.5981 - 91.55/temp) * 1.e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_o2(double temp) //calculate saturation pressure of oxygen
+{
+    double P;
+    
+    if (temp < 54.3) // below triple point
+    {
+        // solid oxygen
+        // Based on Fray & Schmitt (2009)
+        P = exp(25.75 - 734.6/temp) * 1.e+0; // [Pa]
+    }
+    else if (temp < 154.54) // between triple point and critical point
+    {
+        // liquid oxygen
+        // From Jacobsen et al. (1997)
+        P = exp(24.632 - 732.3/temp) * 1.e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
+double ms_psat_n2(double temp) //calculate saturation pressure of nitrogen
+{
+    double P;
+    
+    if (temp < 63.14) // below triple point
+    {
+        // solid nitrogen
+        // Based on Fray & Schmitt (2009)
+        P = exp(27.517 - 772.29/temp) * 1.0e+0; // [Pa]
+    }
+    else if (temp < 126.2) // between triple point and critical point
+    {
+        // liquid nitrogen
+        // From Span et al. (2000)
+        P = exp(24.31 - 704.55/temp) * 1.0e+0; // [Pa]
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
 //*********************************************************
 //*********************************************************
 double ms_latent(int mol, double temp)

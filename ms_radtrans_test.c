@@ -27,42 +27,51 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
     static int iter = 0;
 
     double GA;
+    // Calculate gravity
     GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET;
 	double mole2dust, planck, xlll;
+    // Calculate mole2dust???? what is this? particle size and density defined in config file
 	mole2dust = PI*pow(AERSIZE,3)*AERDEN/6.0/AMU*2.0558;
 	
+    // convert to meters for toon solver? (#define TWO_STR_SOLVER  0)
 	double lam1[NLAMBDA];
 	for (i=0; i<NLAMBDA; i++) {
 		lam1[i] = wavelength[i]*1.0E-9; /* convert to m */
 	}
     
     /* Temperature variation */
-//ms: for flux jacobian to solve for steady-state temperatures
-    int nrl, jTvar;
-    nrl = zbin-ncl;
-    double **Tvar;
-    double tempvar[zbin+1];
-    double tempvarc;
-    int isconv1[zbin+1],radcount;
-    double lapse1[zbin+1];
+    //for flux jacobian to solve for steady-state temperatures
+    int nrl, jTvar; //number of radiative layers, number of temperature variables
+    nrl = zbin-ncl; //number of radiative layers
+    double **Tvar; // 2D array to store temperature variation? i think
+    double tempvar[zbin+1]; //temperature variation
+    double tempvarc; //temperature variation
+    int isconv1[zbin+1],radcount; //convective layers
+    double lapse1[zbin+1]; //convective layers
+
+    // reverse the convective layers
     for (k=1; k<=zbin; k++) {
         isconv1[k] = isconv[zbin+1-k]; /* reverse, from top to bottom */
         lapse1[k] = lapse[zbin+1-k];
     }
-    radcount = 0;
+    radcount = 0; //number of radiative layers
 
     jTvar = nrl+1;
+
+    // For time stepping solver 
     if (TIME_STEPPING) jTvar = 0;
     Tvar = dmatrix(0,zbin,0,jTvar);
     for (j=0; j<=zbin; j++) {
         Tvar[j][0] = T[zbin-j];
         tempvar[j] = RJACOB_TEMPVAR;//*T[zbin-j]; //ms23
     }
-    if (!TIME_STEPPING)//otherwise Tvar is effectively a vector
+
+    // For Jacobian solver
+    if (!TIME_STEPPING)
     {
-    for (j=0; j<=zbin; j++) {
-        Tvar[j][1] = T[zbin-j];
-    }
+        for (j=0; j<=zbin; j++) {
+            Tvar[j][1] = T[zbin-j];
+        }
     Tvar[0][1] = Tvar[0][1]+tempvar[0];
     
 //    Tvar[0][1] = Tvar[0][1]*(1+tempvar); //ms22: testing

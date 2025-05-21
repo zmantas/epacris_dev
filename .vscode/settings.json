@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "nrutil.h": "c",
-        "55cnce_comp1_f033_alt.h": "c"
+        "55cnce_comp1_f033_alt.h": "c",
+        "55cnce_conv_test.h": "c",
+        "55cnce_comp3_f025.h": "c",
+        "global_temp.h": "c",
+        "constant.h": "c"
     }
 }

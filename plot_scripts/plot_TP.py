@@ -21,7 +21,7 @@ cyberpunk_colors = [
 ]
 
 # Get all .txt files in the specified directory
-tp_files = glob.glob('./HELIOS_output/bench_comp2/*.txt')
+tp_files = glob.glob('./HELIOS_output/bench_comp5/*.txt')
 
 # Create empty lists to store data from all files
 all_data = []
@@ -54,7 +54,7 @@ else:
         plt.plot(data[:, 1], data[:, 0] / 1e6, label=file_names[i], color=color, linewidth=2.5, zorder=zord)
 
     # List of suffixes to plot - modify this list to choose which profiles to show
-    suffixes = ['comp2_f025', 'comp2_f033', 'comp2_f067']
+    suffixes = ['comp5_f025', 'comp5_f033', 'comp5_f067']
 
     # Plot each 55cnce profile with the same color set
     for i, suffix in enumerate(suffixes):
@@ -78,7 +78,7 @@ else:
 
     os.makedirs('output', exist_ok=True)
     # Save the figure in high resolution
-    plt.savefig('output/temperature_profiles_bench_comp2.png', dpi=400, bbox_inches='tight')
+    plt.savefig('output/temperature_profiles_bench_comp5.png', dpi=400, bbox_inches='tight')
 
     plt.show()  # Display the plot
 

@@ -1,0 +1,227 @@
+\begin{thebibliography}{}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\providecommand{\url}[1]{\href{#1}{#1}}
+
+\bibitem[{{Armstrong} {et~al.}(2019){Armstrong}, {Frost}, {McCammon}, {Rubie},
+  \& {Boffa Ballaran}}]{2019Sci...365..903A}
+{Armstrong}, K., {Frost}, D.~J., {McCammon}, C.~A., {Rubie}, D.~C., \& {Boffa
+  Ballaran}, T. 2019, Science, 365, 903
+
+\bibitem[{{Benner} {et~al.}(2020){Benner}, {Bell}, {Biondi}, {Brasser},
+  {Carell}, {Kim}, {Mojzsis}, {Omran}, {Pasek}, \& {Trail}}]{Benner+2020}
+{Benner}, S.~A., {Bell}, E.~A., {Biondi}, E., {et~al.} 2020, ChemSystemsChem,
+  2, e1900035
+
+\bibitem[{{Bonati} {et~al.}(2019){Bonati}, {Lichtenberg}, {Bower}, {Timpe}, \&
+  {Quanz}}]{2019A&A...621A.125B}
+{Bonati}, I., {Lichtenberg}, T., {Bower}, D.~J., {Timpe}, M.~L., \& {Quanz},
+  S.~P. 2019, \aap, 621, A125
+
+\bibitem[{Borysow(2002)}]{borysow2002collision}
+Borysow, A. 2002, \aap, 390, 779
+
+\bibitem[{Borysow {et~al.}(2001)Borysow, J{\o}rgensen, \& Fu}]{borysow2001high}
+Borysow, A., J{\o}rgensen, U.~G., \& Fu, Y. 2001, J. Quant. Spectrosc. Radiat.
+  Transf., 68, 235
+
+\bibitem[{{Carlson} {et~al.}(2014){Carlson}, {Garnero}, {Harrison}, {Li},
+  {Manga}, {McDonough}, {Mukhopadhyay}, {Romanowicz}, {Rubie}, {Williams}, \&
+  {Zhong}}]{2014AREPS..42..151C}
+{Carlson}, R.~W., {Garnero}, E., {Harrison}, T.~M., {et~al.} 2014, Annu. Re.
+  Earth Planet. Sci., 42, 151
+
+\bibitem[{{Demory} {et~al.}(2016){Demory}, {Gillon}, {de Wit}, {Madhusudhan},
+  {Bolmont}, {Heng}, {Kataria}, {Lewis}, {Hu}, {Krick}, {Stamenkovi{\'c}},
+  {Benneke}, {Kane}, \& {Queloz}}]{2016Natur.532..207D}
+{Demory}, B.-O., {Gillon}, M., {de Wit}, J., {et~al.} 2016, \nat, 532, 207
+
+\bibitem[{{Ding} \& {Pierrehumbert}(2018)}]{ding2018global}
+{Ding}, F., \& {Pierrehumbert}, R.~T. 2018, \apj, 867, 54
+
+\bibitem[{{Edwards} \& {Slingo}(1996)}]{edwards1996socrates}
+{Edwards}, J.~M., \& {Slingo}, A. 1996, Q. J. R. Meteorol. Soc., 122, 689
+
+\bibitem[{{Elkins-Tanton}(2012)}]{ElkinsTanton2012AREPS}
+{Elkins-Tanton}, L.~T. 2012, Annu. Rev. Earth Planet. Sci., 40, 113
+
+\bibitem[{{Genda} {et~al.}(2017){Genda}, {Brasser}, \& {Mojzsis}}]{Genda+2017}
+{Genda}, H., {Brasser}, R., \& {Mojzsis}, S.~J. 2017, Earth Planet. Sci. Lett.,
+  480, 25
+
+\bibitem[{Goldblatt \& Zahnle(2011)}]{goldblatt2011clouds}
+Goldblatt, C., \& Zahnle, K. 2011, Climate of the Past, 7
+
+\bibitem[{{Gordon} {et~al.}(2017){Gordon}, {Rothman}, {Hill}, {Kochanov},
+  {Tan}, {Bernath}, {Birk}, {Boudon}, {Campargue}, {Chance}, {Drouin}, {Flaud},
+  {Gamache}, {Hodges}, {Jacquemart}, {Perevalov}, {Perrin}, {Shine}, {Smith},
+  {Tennyson}, {Toon}, {Tran}, {Tyuterev}, {Barbe}, {Cs{\'a}sz{\'a}r}, {Devi},
+  {Furtenbacher}, {Harrison}, {Hartmann}, {Jolly}, {Johnson}, {Karman},
+  {Kleiner}, {Kyuberis}, {Loos}, {Lyulin}, {Massie}, {Mikhailenko},
+  {Moazzen-Ahmadi}, {M{\"u}ller}, {Naumenko}, {Nikitin}, {Polyansky}, {Rey},
+  {Rotger}, {Sharpe}, {Sung}, {Starikova}, {Tashkun}, {Auwera}, {Wagner},
+  {Wilzewski}, {Wcis{\l}o}, {Yu}, \& {Zak}}]{HITRAN2016}
+{Gordon}, I.~E., {Rothman}, L.~S., {Hill}, C., {et~al.} 2017, \jqsrt, 203, 3
+
+\bibitem[{Graham \& Pierrehumbert(2020)}]{graham2020thermodynamic}
+Graham, R., \& Pierrehumbert, R. 2020, \apj, 896
+
+\bibitem[{Guillot(1995)}]{guillot1995condensation}
+Guillot, T. 1995, Science, 269, 1697
+
+\bibitem[{Ingersoll(1969)}]{ingersoll69}
+Ingersoll, A. 1969, J. Atmos. Sci., 26, 1191 – 1198
+
+\bibitem[{{Karman} {et~al.}(2019){Karman}, {Gordon}, {van der Avoird},
+  {Baranov}, {Boulet}, {Drouin}, {Groenenboom}, {Gustafsson}, {Hartmann},
+  {Kurucz}, {Rothman}, {Sun}, {Sung}, {Thalman}, {Tran}, {Wishnow},
+  {Wordsworth}, {Vigasin}, {Volkamer}, \& {van der Zande}}]{HITRAN_CIA2}
+{Karman}, T., {Gordon}, I.~E., {van der Avoird}, A., {et~al.} 2019, \icarus,
+  328, 160
+
+\bibitem[{{Katyal} {et~al.}(2020){Katyal}, {Ortenzi}, {Lee Grenfell}, {Noack},
+  {Sohl}, {Godolt}, {Garc{\'\i}a Mu{\~n}oz}, {Schreier}, {Wunderlich}, \&
+  {Rauer}}]{2020A&A...643A..81K}
+{Katyal}, N., {Ortenzi}, G., {Lee Grenfell}, J., {et~al.} 2020, \aap, 643, A81
+
+\bibitem[{{Kite} \& {Barnett}(2020)}]{KiteBarnett2020PNAS}
+{Kite}, E.~S., \& {Barnett}, M. 2020, Proc. Natl. Acad. Sci., 117, 18264
+
+\bibitem[{Kitzmann(2016)}]{kitzmann2016revisiting}
+Kitzmann, D. 2016, \apjl, 817, L18
+
+\bibitem[{Kopparapu {et~al.}(2013)Kopparapu, Ramirez, Kasting, Eymet, Robinson,
+  Mahadevan, Terrien, Domagal-Goldman, Meadows, \& Deshpande}]{Kopparapu:2013}
+Kopparapu, R.~K., Ramirez, R., Kasting, J.~F., {et~al.} 2013, \apj, 765, 131
+
+\bibitem[{{Kreidberg} {et~al.}(2019){Kreidberg}, {Koll}, {Morley}, {Hu},
+  {Schaefer}, {Deming}, {Stevenson}, {Dittmann}, {Vanderburg}, {Berardo},
+  {Guo}, {Stassun}, {Crossfield}, {Charbonneau}, {Latham}, {Loeb}, {Ricker},
+  {Seager}, \& {Vanderspek}}]{2019Natur.573...87K}
+{Kreidberg}, L., {Koll}, D. D.~B., {Morley}, C., {et~al.} 2019, \nat, 573, 87
+
+\bibitem[{Leconte {et~al.}(2017)Leconte, Selsis, Hersant, \&
+  Guillot}]{leconte2017condensation}
+Leconte, J., Selsis, F., Hersant, F., \& Guillot, T. 2017, \aap, 598, A98
+
+\bibitem[{Lemmon {et~al.}(2004)Lemmon, McLinden, Friend, Linstrom, \&
+  Mallard}]{lemmon2004nist}
+Lemmon, E., McLinden, M., Friend, D., Linstrom, P., \& Mallard, W. 2004, NIST
+  Chemistry WebBook
+
+\bibitem[{Li {et~al.}(2018)Li, Ingersoll, \& Oyafuso}]{li2018moist}
+Li, C., Ingersoll, A.~P., \& Oyafuso, F. 2018, J. Atmos. Sci., 75, 1063
+
+\bibitem[{{Lichtenberg} {et~al.}(2021){Lichtenberg}, {Bower}, {Hammond},
+  {Boukrouche}, {Sanan}, {Tsai}, \& {Pierrehumbert}}]{LichtenbergJGRP21}
+{Lichtenberg}, T., {Bower}, D.~J., {Hammond}, M., {et~al.} 2021, J. Geophys.
+  Res. Planets, 126, e2020JE006711
+
+\bibitem[{{LIFE collaboration} {et~al.}(2021){LIFE collaboration}, {Quanz},
+  {Ottiger}, {Fontanet}, {Kammerer}, {Menti}, {Dannert}, {Gheorghe}, {Absil},
+  {Airapetian}, {Alei}, {Allart}, {Angerhausen}, {Blumenthal}, {Cabrera},
+  {Carri{\'o}n-Gonz{\'a}lez}, {Chauvin}, {Danchi}, {Dandumont}, {Defr{\`e}re},
+  {Dorn}, {Ehrenreich}, {Ertel}, {Fridlund}, {Garc{\'\i}a Mu{\~n}oz},
+  {Gasc{\'o}n}, {Glauser}, {Grenfell}, {Guidi}, {Hagelberg}, {Helled},
+  {Ireland}, {Kopparapu}, {Korth}, {Kraus}, {L{\'e}ger}, {Leedj{\"a}rv},
+  {Lichtenberg}, {Lillo-Box}, {Linz}, {Liseau}, {Loicq}, {Mahendra}, {Malbet},
+  {Mathew}, {Mennesson}, {Meyer}, {Mishra}, {Molaverdikhani}, {Noack}, {Oza},
+  {Pall{\'e}}, {Parviainen}, {Quirrenbach}, {Rauer}, {Ribas}, {Rice},
+  {Romagnolo}, {Rugheimer}, {Schwieterman}, {Serabyn}, {Sharma}, {Stassun},
+  {Szul{\'a}gyi}, {Wang}, {Wunderlich}, \& {Wyatt}}]{LIFE2021a}
+{LIFE collaboration}, {Quanz}, S.~P., {Ottiger}, M., {et~al.} 2021, arXiv
+  e-prints, arXiv:2101.07500
+
+\bibitem[{{Liggins} {et~al.}(2020){Liggins}, {Shorttle}, \&
+  {Rimmer}}]{2020E&PSL.55016546L}
+{Liggins}, P., {Shorttle}, O., \& {Rimmer}, P.~B. 2020, Earth Planet. Sci.
+  Lett., 550, 116546
+
+\bibitem[{{Luger} \& {Barnes}(2015)}]{2015AsBio..15..119L}
+{Luger}, R., \& {Barnes}, R. 2015, Astrobiology, 15, 119
+
+\bibitem[{{Lupu} {et~al.}(2014){Lupu}, {Zahnle}, {Marley}, {Schaefer},
+  {Fegley}, {Morley}, {Cahoy}, {Freedman}, \& {Fortney}}]{2014ApJ...784...27L}
+{Lupu}, R.~E., {Zahnle}, K., {Marley}, M.~S., {et~al.} 2014, \apj, 784, 27
+
+\bibitem[{{Mlawer} {et~al.}(2012){Mlawer}, {Payne}, {Moncet}, {Delamere},
+  {Alvarado}, \& {Tobin}}]{2012RSPTA.370.2520M}
+{Mlawer}, E.~J., {Payne}, V.~H., {Moncet}, J.~L., {et~al.} 2012, Philos. Trans.
+  Royal Soc. A, 370, 2520
+
+\bibitem[{{Mojzsis} {et~al.}(2001){Mojzsis}, {Harrison}, \&
+  {Pidgeon}}]{2001Natur.409..178M}
+{Mojzsis}, S.~J., {Harrison}, T.~M., \& {Pidgeon}, R.~T. 2001, \nat, 409, 178
+
+\bibitem[{{Morley} {et~al.}(2017){Morley}, {Kreidberg}, {Rustamkulov},
+  {Robinson}, \& {Fortney}}]{2017ApJ...850..121M}
+{Morley}, C.~V., {Kreidberg}, L., {Rustamkulov}, Z., {Robinson}, T., \&
+  {Fortney}, J.~J. 2017, \apj, 850, 121
+
+\bibitem[{{Pahlevan} {et~al.}(2019){Pahlevan}, {Schaefer}, \&
+  {Hirschmann}}]{2019E&PSL.52615770P}
+{Pahlevan}, K., {Schaefer}, L., \& {Hirschmann}, M.~M. 2019, Earth Planet. Sci.
+  Lett., 526, 115770
+
+\bibitem[{Pierrehumbert(2010)}]{Pierrehumbert:2010-book}
+Pierrehumbert, R.~T. 2010, Principles of Planetary Climate (Cambridge
+  University Press)
+
+\bibitem[{Pierrehumbert \& Ding(2016)}]{pierrehumbert2016dynamics}
+Pierrehumbert, R.~T., \& Ding, F. 2016, Proc. R. Soc. A, 472, 20160107
+
+\bibitem[{{Pluriel} {et~al.}(2019){Pluriel}, {Marcq}, \&
+  {Turbet}}]{2019Icar..317..583P}
+{Pluriel}, W., {Marcq}, E., \& {Turbet}, M. 2019, \icarus, 317, 583
+
+\bibitem[{{Quanz} {et~al.}(2019){Quanz}, {Absil}, {Angerhausen}, {Benz},
+  {Bonfils}, {Berger}, {Brogi}, {Cabrera}, {Danchi}, {Defr{\`e}re}, {van
+  Dishoeck}, {Ehrenreich}, {Ertel}, {Fortney}, {Gaudi}, {Girard}, {Glauser},
+  {Grenfell}, {Ireland}, {Janson}, {Kammerer}, {Kitzmann}, {Kraus}, {Krause},
+  {Labadie}, {Lacour}, {Lichtenberg}, {Line}, {Linz}, {Loicq}, {Mennesson},
+  {Meyer}, {Miguel}, {Monnier}, {N'Diaye}, {Pall{\'e}}, {Queloz}, {Rauer},
+  {Ribas}, {Rugheimer}, {Selsis}, {Serabyn}, {Snellen}, {Sozzetti},
+  {Stapelfeldt}, {Triaud}, {Udry}, \& {Wyatt}}]{2019arXiv190801316Q}
+{Quanz}, S.~P., {Absil}, O., {Angerhausen}, D., {et~al.} 2019, ESA Voyage 2050
+  white paper, arXiv:1908.01316
+
+\bibitem[{{Richard} {et~al.}(2012){Richard}, {Gordon}, {Rothman}, {Abel},
+  {Frommhold}, {Gustafsson}, {Hartmann}, {Hermans}, {Lafferty}, {Orton},
+  {Smith}, \& {Tran}}]{HITRAN_CIA1}
+{Richard}, C., {Gordon}, I.~E., {Rothman}, L.~S., {et~al.} 2012, \jqsrt, 113,
+  1276
+
+\bibitem[{{Sasselov} {et~al.}(2020){Sasselov}, {Grotzinger}, \&
+  {Sutherland}}]{2020SciA....6.3419S}
+{Sasselov}, D.~D., {Grotzinger}, J.~P., \& {Sutherland}, J.~D. 2020, Sci. Adv.,
+  6, eaax3419
+
+\bibitem[{Walker {et~al.}(1981)Walker, Hays, \&
+  Kasting}]{Walker-Hays-Kasting-1981:negative}
+Walker, J.~C.~G., Hays, P.~B., \& Kasting, J.~F. 1981, J. Geophys. Res., 86,
+  9776
+
+\bibitem[{Weidenschilling \& Lewis(1973)}]{weidenschilling1973atmospheric}
+Weidenschilling, S., \& Lewis, J. 1973, Icarus, 20, 465
+
+\bibitem[{{Wilde} {et~al.}(2001){Wilde}, {Valley}, {Peck}, \&
+  {Graham}}]{2001Natur.409..175W}
+{Wilde}, S.~A., {Valley}, J.~W., {Peck}, W.~H., \& {Graham}, C.~M. 2001, \nat,
+  409, 175
+
+\bibitem[{{Wordsworth} \&
+  {Pierrehumbert}(2013{\natexlab{a}})}]{2013Sci...339...64W}
+{Wordsworth}, R., \& {Pierrehumbert}, R. 2013{\natexlab{a}}, Science, 339, 64
+
+\bibitem[{{Wordsworth} \&
+  {Pierrehumbert}(2013{\natexlab{b}})}]{2013ApJ...778..154W}
+{Wordsworth}, R.~D., \& {Pierrehumbert}, R.~T. 2013{\natexlab{b}}, \apj, 778,
+  154
+
+\bibitem[{Yang \& Abbot(2014)}]{yang2014-low}
+Yang, J., \& Abbot, D.~S. 2014, \apj, 784
+
+\bibitem[{Zahnle {et~al.}(2020)Zahnle, Lupu, Catling, \&
+  Wogan}]{zahnle2020creation}
+Zahnle, K.~J., Lupu, R., Catling, D.~C., \& Wogan, N. 2020, {PSJ}, 1, 11
+
+\end{thebibliography}

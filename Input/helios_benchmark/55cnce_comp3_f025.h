@@ -13,11 +13,6 @@ Note: The parameters in this file can be modified to model different planets aro
 //---------------------------------------------------------------------
 //#define OUT_DIR         "Results/55cnce/standard_200_test_f03/IW-2/"
 #define OUT_DIR         "Results/55cnce/helios_benchmark/55cnce_comp3_f025/"
-//#define OUT_DIR         "Results/toi270d-valid2-Texp8/"
-//#define OUT_DIR         "Results/toi270d-valid3-lowTiso/"
-//#define OUT_DIR         "Results/toi270d-valid4-highTiso/"
-//#define OUT_DIR         "Results/toi270d-valid5-1DTERRA/"
-//#define OUT_DIR         "Results/toi270d-valid6-Tiso2k/"
 //---------------------------------------------------------------------
 #define COMMENTS        "helios_benchmark_55cnce_comp3_f025"
 //#define COMMENTS        "Time Stepping HELIOS, init Guillot; Tint=100K" //to be printed in log file for debugging purposes
