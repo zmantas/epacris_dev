@@ -325,11 +325,12 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 fclose(frt);
                 //pcount = 0; nneded for convection later
             }
-            //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        }   //ms22: END of radiative transfer iteration
-            //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        }
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //ms22: END of radiative transfer iteration
+        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        // Check if RTstopfile exists and abort if it does (Not sure what this is for)
+        // This is if you dont want to do convective adjustment
         if(access(RTstopfile, F_OK )==0) printf("\n\n%s\n\n","===== RTstopfile found. RT loop aborted! =====");
 
         //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -349,16 +350,25 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             {
                 ms_adiabat(j,lapse,heliumnumber[j],&cp[j]); //calculate appropriate lapse rate depending on dry, moist, and condensate conditions
                 
-                //need to propagate cold traps upwards
-                if (j<zbin) {
-                    for (jabove=j+1; jabove<=zbin; jabove++) {
-                        for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
-                            if (xx[jabove][CONDENSIBLES[iconden]]/MM[jabove] > xx[j][CONDENSIBLES[iconden]]/MM[j]) {
-                                xx[jabove][CONDENSIBLES[iconden]] = xx[j][CONDENSIBLES[iconden]]/MM[j]*MM[jabove];
-                            }
-                        }
-                    }
-                } 
+                // //need to propagate cold traps upwards
+                // if (j<zbin) {
+                //     for (jabove=j+1; jabove<=zbin; jabove++) {
+                //         for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
+                //             double old_abundance = xx[jabove][CONDENSIBLES[iconden]];
+                //             if (xx[jabove][CONDENSIBLES[iconden]]/MM[jabove] > xx[j][CONDENSIBLES[iconden]]/MM[j]) {
+                //                 xx[jabove][CONDENSIBLES[iconden]] = xx[j][CONDENSIBLES[iconden]]/MM[j]*MM[jabove];
+                //                 printf("COLD TRAP: Layer %d, Species %d - Abundance changed from %.6e to %.6e (forced to match layer %d)\n",
+                //                        jabove, CONDENSIBLES[iconden], old_abundance, xx[jabove][CONDENSIBLES[iconden]], j);
+                //             }
+                //         }
+                //     }
+                // } 
+                
+                // Debug: Show final gas abundances after cold trap propagation
+                // for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
+                //     printf("POST-COLDTRAP: Layer %d, Species %d - Final gas abundance: %.6e (VMR: %.6e)\n",
+                //            j, CONDENSIBLES[iconden], xx[j][CONDENSIBLES[iconden]], xx[j][CONDENSIBLES[iconden]]/MM[j]);
+                // }
                 
                 //check for clouds
                 nclouds[j] = 0;
@@ -422,25 +432,104 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
             if(CONVEC_ADJUST==1 && ncl>=0) ms_temp_adj(tempb, P, lapse, isconv, cp, ncreg, pot_temp); //ms22: assign convective regimes, adjust temperatures
 
+            // Track cloud mass changes for diagnostic purposes - we're at the end of a convective adjustment step
+            static double prev_total_cloud = -1.0; // Track between iterations, -1 indicates first run
+            static double prev_total_gas = -1.0;   // Track between iterations
+            double curr_total_cloud = 0.0;
+            double curr_total_gas = 0.0;
+
+            // Calculate total cloud and gas mass
+            for (j=0; j<=zbin; j++) {
+                for (k=0; k<NCONDENSIBLES; k++) {
+                    int cspec = CONDENSIBLES[k];
+                    curr_total_cloud += clouds[j][cspec];
+                    curr_total_gas += xx[j][cspec];
+                }
+            }
+            
+            // Report cloud mass changes if this isn't the first run
+            if (prev_total_cloud >= 0.0) {
+                double cloud_change = curr_total_cloud - prev_total_cloud;
+                double gas_change = curr_total_gas - prev_total_gas;
+                
+                if (fabs(cloud_change) > 1.0e-10 || fabs(gas_change) > 1.0e-10) {
+                    printf("\nCONVECTIVE STEP %d CLOUD DIAGNOSTICS:\n", total_step_count);
+                    printf("  Total cloud mass:  %.6e → %.6e (change: %.6e)\n", 
+                           prev_total_cloud, curr_total_cloud, cloud_change);
+                    printf("  Total gas mass:    %.6e → %.6e (change: %.6e)\n", 
+                           prev_total_gas, curr_total_gas, gas_change);
+                    printf("  Total mass change: %.6e (should be near zero)\n", 
+                           cloud_change + gas_change);
+                    printf("\n");
+                }
+            }
+            
+            // Store current values for next iteration
+            prev_total_cloud = curr_total_cloud;
+            prev_total_gas = curr_total_gas;
+
             // Add live plotting during convection - plot at every step since there are few convective steps
             total_step_count++; // Increment step count for live plot
 
             // Create temporary data file for plotting
             FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
-            // Write header with all species numbers
+            
+            // Write header with all species numbers and cloud counterparts
             fprintf(temp_data, "# Temperature Pressure");
             for (ispec=1; ispec<=NSP; ispec++) {
                 fprintf(temp_data, " %d", ispec);
             }
+            // Add cloud species headers with 'c' prefix
+            for (ispec=1; ispec<=NSP; ispec++) {
+                fprintf(temp_data, " c%d", ispec);
+            }
             fprintf(temp_data, "\n");
+            
             for (j=zbin; j>=0; j--) {
                 fprintf(temp_data, "%f %e", tempb[j], P[j]/1e5);  // Use tempb instead of tempeq since we're not smoothing here
+                
+                // First write gas phase abundances
                 for (ispec=1; ispec<=NSP; ispec++) {
                     fprintf(temp_data, " %e", xx[j][ispec]/MM[j]);  // Convert to mixing ratio
                 }
+                
+                // Then write cloud abundances
+                for (ispec=1; ispec<=NSP; ispec++) {
+                    // Most species will have zero clouds
+                    double cloud_vmr = 0.0;
+                    
+                    // Check if this is a condensible species
+                    for (k=0; k<NCONDENSIBLES; k++) {
+                        if (ispec == CONDENSIBLES[k]) {
+                            cloud_vmr = clouds[j][ispec]/MM[j];
+                            break;
+                        }
+                    }
+                    fprintf(temp_data, " %e", cloud_vmr);
+                }
+                
                 fprintf(temp_data, "\n");
             }
             fclose(temp_data);
+            
+            // Check for non-zero cloud abundances
+            int found_clouds = 0;
+            printf("Checking cloud abundances in profile...\n");
+            for (j=0; j<=zbin; j++) {
+                for (k=0; k<NCONDENSIBLES; k++) {
+                    int ispec = CONDENSIBLES[k];
+                    double cloud_vmr = clouds[j][ispec]/MM[j];
+                    if (cloud_vmr > 1.0e-10) {
+                        found_clouds = 1;
+                        printf("  Non-zero cloud abundance found: Species %d at layer %d (P=%e bar): VMR=%e\n", 
+                               ispec, j, P[j]/1e5, cloud_vmr);
+                    }
+                }
+            }
+            
+            if (!found_clouds) {
+                printf("WARNING: All cloud abundances are zero in the current profile!\n");
+            }
 
             // Execute Python script with step count argument
             sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s", total_step_count, live_plot_dir);
@@ -491,14 +580,18 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             fprintf(frc,"%s\t%10s\t%8s\t%8s\t%5s\t%s\t%s\t%s\t%10s\t%s\n","Layer","Height","log(P)","cp","lapse","nClouds","isconv","Conv_Region","Pot_Temp","Temp_center");
             fcon=fopen(outcondiag,"w");
             fprintf(fcon,"%s\t%8s\t%s","Layer","log(P)","nClouds");
-            for (k=0;k<NCONDENSIBLES;k++) fprintf(fcon,"\t%s %3d\t%s %4d","Molec.",CONDENSIBLES[k],"Cloud",CONDENSIBLES[k]); //Condensibles diagnostics
+            for (k=0;k<NCONDENSIBLES;k++) {
+                fprintf(fcon,"\t%s[%d]\t%s[%d]","Molec",CONDENSIBLES[k],"Cloud",CONDENSIBLES[k]);
+            }
             fprintf(fcon,"\n");
 
             for (j=1; j<=zbin; j++) 
             {
                 fprintf(frc,"%d\t%10f\t%8f\t%8f\t%8f\t%d\t%d\t%d\t%10e\t%f\n",j,znew[j],log10(P[j]),cp[j],lapse[j],nclouds[j],isconv[j],ncreg[j],pot_temp[j],tempc[j]); //Rad-Conv diagnostics
                 fprintf(fcon,"%d\t%f\t%d",j,log10(P[j]),nclouds[j]); //Condensibles diagnostics
-                for (k=0;k<NCONDENSIBLES;k++) fprintf(fcon,"\t%.4e\t%.4e",xx[j][CONDENSIBLES[k]]/MM[j],clouds[j][CONDENSIBLES[k]]/MM[j]); //Condensibles diagnostics
+                for (k=0;k<NCONDENSIBLES;k++) {
+                    fprintf(fcon,"\t%.4e\t%.4e",xx[j][CONDENSIBLES[k]]/MM[j],clouds[j][CONDENSIBLES[k]]/MM[j]);
+                }
                 fprintf(fcon,"\n");
             }
             fclose(frc);
@@ -522,6 +615,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             printf("%s\n",filleq);
             printf("Climate converged\n");
             printf("%s\n",filleq);
+            
+
             break;
         }
     
@@ -529,6 +624,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             printf("%s\n",filleq);
             printf("No convective layers found. Rad-Conv-loop done, but not all layers meet selected radiative equilibrium requirement\n");
             printf("%s\n",filleq);
+            
+
             break;
         }
 //*************************************************************

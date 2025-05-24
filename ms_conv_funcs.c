@@ -46,7 +46,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
 
     //LOCAL parameters
     int i,j;
-//input file    int NCONDENSIBLES = 1; //number of potential condensibles; here H2O
+    //input file    int NCONDENSIBLES = 1; //number of potential condensibles; here H2O
 
     //variables for adiabatic calculation
     double Xd,cp_d; //mole fraction of non-condensible gas, heat capacity of non-condensible gas
@@ -67,12 +67,12 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
 
     double lapse_num, lapse_denom; //numerator and denominator of lapse rate
     double cp_num, cp_denom; //numerator and denominator of heat capacity
-    double sum_beta_xv, big_sum_denom_num; //sum of beta*Xv and big sum of denominator of lapse rate
-    
+    double sum_beta_xv, big_sum_denom_num_left_term, big_sum_denom_num_right_term; //sum of beta*Xv and big sum of denominator terms of lapse rate
+
     //START function
     //print number of condensibles species
-    if(lay==1) printf("%s\n","--- Adiabat calculation ---");
-    if(lay==1) printf("%s\t%d\n","Number of condensibles species:",NCONDENSIBLES);
+    // if(lay==1) printf("%s\n","--- Adiabat calculation ---");
+    // if(lay==1) printf("%s\t%d\n","Number of condensibles species:",NCONDENSIBLES);
 
     Xd = 1.0; //mole fraction of non-condensible gas
     cp_d = 0.0; //heat capacity of non-condensible gas
@@ -82,17 +82,11 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     {
         if(lay==1) printf("%s%d%s\t%d\n","CONDENSIBLE[",i,"] = ",CONDENSIBLES[i]);
 
-        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account
-        //Xc[i] = 0.0; //no preexisting clouds taken into account
-        Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles
-
-
         //if(lay==1) printf("%s%d%s\t%e\n","Xv[",i,"] = ",Xv[i]); (debugging)
 
         //calculate saturation pressure for each condensible species
         if(CONDENSIBLES[i]==7) psat[i] = ms_psat_h2o(tl[lay]);  // Condenses ~273K (liquid), ~180K (ice)
         if(CONDENSIBLES[i]==9) psat[i] = ms_psat_nh3(tl[lay]);  // Condenses ~195K (triple point)
-
         // These are added and not checked for sources
         if(CONDENSIBLES[i]==20) psat[i] = ms_psat_co(tl[lay]);  // Condenses ~68K (triple point)
         if(CONDENSIBLES[i]==21) psat[i] = ms_psat_ch4(tl[lay]); // Condenses ~90K (triple point)
@@ -100,7 +94,6 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         if(CONDENSIBLES[i]==53) psat[i] = ms_psat_h2(tl[lay]);  // Condenses ~14K (triple point)
         if(CONDENSIBLES[i]==54) psat[i] = ms_psat_o2(tl[lay]);  // Condenses ~54K (triple point)
         if(CONDENSIBLES[i]==55) psat[i] = ms_psat_n2(tl[lay]);  // Condenses ~63K (triple point)
-
         /* Additional species that could be included:
         if(CONDENSIBLES[i]==43) psat[i] = ms_psat_so2(tl[lay]);  // Condenses ~198K (triple point)
         if(CONDENSIBLES[i]==45) psat[i] = ms_psat_h2s(tl[lay]);  // Condenses ~188K (triple point)
@@ -118,40 +111,115 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         if(CONDENSIBLES[i]==107) psat[i] = ms_psat_al2O3(tl[lay]); // Condenses ~1700-1800K (very hot)
         */
 
-        //calculate condensation rate for each condensible species
-        dp[i] = pl[lay]*Xv[i] - psat[i];
-        //debugging if(lay==1 || dp[i]>0.0) printf("%s%d%s%e\t%s%d%s%e\n","pl[",lay,"] = ",pl[lay],"psat[",i,"] = ",psat[i]);
-       
-        if(dp[i]>=0.0) //if saturated, then add to clouds and reduce gas fraction
-        {
-            Xc[i] += (1.0 - psat[i]/(pl[lay]*Xv[i]))*Xv[i]; //cloud fraction
-            Xvold = Xv[i]; //old vapor fraction
-            // adjust 
-            Xv[i] *= psat[i]/(pl[lay]*Xv[i]); // here for surface layer: assumes "infinite" ocean reservoir for all condensibles
-            printf("%s%d\t%s%d%s%e%s%e\t%s%d%s%e\n","Saturation in layer ",lay," Xv[",CONDENSIBLES[i],"] was ",Xvold, " now ",Xv[i]," Xc[",CONDENSIBLES[i],"] = ",Xc[i]);
-        }
-        else //ensure unsaturated treatment, i.e. dry adiabat, without any latent heat release is applied
-        {
+
+        // Start condensation calculation
+        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account
+        Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles
+
+        // Calculate total available condensible including condensed stuff
+        double Xtotal = Xv[i] + Xc[i];  // Total water (gas + cloud)
+
+        // Calculate equilibrium partitioning
+        double Xv_sat = psat[i] / pl[lay];  // Maximum gas phase at saturation
+        double Xc_equilibrium = fmax(0.0, Xtotal - Xv_sat);  // Equilibrium cloud amount
+
+        // CORRECT: Update phases while conserving total mass
+        if (Xtotal > Xv_sat) {
+            // Supersaturated: some should be cloud
+            Xv[i] = Xv_sat;
+            Xc[i] = Xc_equilibrium;
+        } else {
+            // Undersaturated: all should be gas  
+            Xv[i] = Xtotal;
             Xc[i] = 0.0;
-            Xv[i] = 0.0;
         }
+
         Xd -= Xv[i] + Xc[i];
-//    if(lay==1 || dp[i]>0.0) printf("%s%e\n","Xd = ",Xd);
+
+        // //calculate condensation rate for each condensible species (super-saturation)
+        // dp[i] = pl[lay]*Xv[i] - psat[i];
+        // //debugging if(lay==1 || dp[i]>0.0) printf("%s%d%s%e\t%s%d%s%e\n","pl[",lay,"] = ",pl[lay],"psat[",i,"] = ",psat[i]);
+       
+        // if(dp[i]>=0.0) //if saturated, then add to clouds and reduce gas fraction
+        // {
+        //     Xc[i] += (1.0 - psat[i]/(pl[lay]*Xv[i]))*Xv[i]; //condensed fraction
+        //     Xvold = Xv[i]; //copy old vapor fraction
+        //     // adjust vapor fraction to be in equilibrium with the saturation pressure
+        //     Xv[i] = psat[i]/(pl[lay]); // here for surface layer: assumes "infinite" ocean reservoir for all condensibles (changed from Xv[i] *= psat[i]/(pl[lay]*Xv[i]) to Xv[i] = psat[i]/pl[lay]))
+        //     //printf("%s%d\t%s%d%s%e%s%e\t%s%d%s%e\n","Saturation in layer ",lay," Xv[",CONDENSIBLES[i],"] was ",Xvold, " now ",Xv[i]," Xc[",CONDENSIBLES[i],"] = ",Xc[i]);
+        // }
+        // else //ensure unsaturated treatment, i.e. dry adiabat, without any latent heat release is applied
+        // {
+        //     //Old implementation with reset
+        //     //Xc[i] = 0.0;
+        //     //Xv[i] = 0.0; this was originally in the code, but I dont think this reset is needed
+        //     // Xv is used for lapse rate calculation
+        //     // MASS CONSERVATION FIX: Add cloud mass back to vapor phase before removing the cloud
+        //     if (Xc[i] > 0.0) {
+        //         // Only log significant evaporation events
+        //         if (Xc[i] > 1.0e-10) {
+        //             printf("Cloud evaporation: Layer %d, Species %d, Cloud VMR %.2e being returned to gas phase\n", 
+        //                    lay, CONDENSIBLES[i], Xc[i]);
+        //             printf("  Before evaporation: Xv[%d] = %.6e, xx[%d][%d] = %.6e\n", 
+        //                    i, Xv[i], lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]]);
+        //         }
+        //         // Add the cloud mass back to vapor phase
+        //         Xv[i] += Xc[i];
+        //         // Reset cloud to zero
+        //         Xc[i] = 0.0;
+                
+        //         if (Xc[i] > 1.0e-10) {
+        //             printf("  After adding cloud to vapor: Xv[%d] = %.6e\n", i, Xv[i]);
+        //         }
+        //     } else {
+        //         // No cloud mass to evaporate
+        //         Xc[i] = 0.0;
+        //     }
+        // }
+        // remaining dry mol fraction is equal to 1 - sum of all vapor and condensed fractions
+
+    //if(lay==1 || dp[i]>0.0) printf("%s%e\n","Xd = ",Xd);
     }
     
-    //Heat capacities, condensate retention, latent heat:
-//    if(lay==1) printf("%s%e\n","xxHe = ",xxHe/MM[lay]);
-    cpxx = xxHe*HeHeat(tl[lay])+xx[lay][7]*H2OHeat(tl[lay])+xx[lay][9]*NH3Heat(tl[lay])+xx[lay][20]*COHeat(tl[lay])+xx[lay][21]*CH4Heat(tl[lay])+xx[lay][52]*CO2Heat(tl[lay])+xx[lay][53]*H2Heat(tl[lay])+xx[lay][54]*O2Heat(tl[lay])+xx[lay][55]*N2Heat(tl[lay]);
+    //*=========Heat capacities, condensate retention, latent heat=============*//
+    //=======================================================================*//
+
+
+    //if(lay==1) printf("%s%e\n","xxHe = ",xxHe/MM[lay]);
+    // STEP 1: Calculate total heat capacity of the ENTIRE atmosphere (all species)
+    // cpxx = Σ(number_density × molar_heat_capacity) for ALL species  [molecules/cm³] × [J/(mol·K)]
+    cpxx = xxHe*HeHeat(tl[lay])+xx[lay][7]*H2OHeat(tl[lay])+xx[lay][9]*NH3Heat(tl[lay])+
+        xx[lay][20]*COHeat(tl[lay])+xx[lay][21]*CH4Heat(tl[lay])+xx[lay][52]*CO2Heat(tl[lay])+
+        xx[lay][53]*H2Heat(tl[lay])+xx[lay][54]*O2Heat(tl[lay])+xx[lay][55]*N2Heat(tl[lay]);
+        // potentially add more heat capacities of possible atmospheric species here
+
+    // STEP 2: Calculate total number density of ALL species 
     MM_cp = xxHe+xx[lay][7]+xx[lay][9]+xx[lay][20]+xx[lay][21]+xx[lay][52]+xx[lay][53]+xx[lay][54]+xx[lay][55];
     
-    cp_d = cpxx / MM_cp; //this would be for dry adiabat
-
+    // STEP 3: Calculate average molar heat capacity of ENTIRE atmosphere
+    cp_d = cpxx / MM_cp;
+    
+    printf("STEP 1-3: cpxx=%.3e, MM_cp=%.3e, cp_d_initial=%.3e\n", cpxx, MM_cp, cp_d);
+    
+    // STEP 4: Loop through each condensible species to subtract them out from total heat capacity and number density
     for (i=0; i<NCONDENSIBLES; i++)
     {
-        if(CONDENSIBLES[i]==7)  {cp_v[i] = H2OHeat(tl[lay]); cp_c[i] = H2OHeat(tl[lay]); MM_cp-=xx[lay][7];  cpxx-=xx[lay][7]*H2OHeat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==9)  {cp_v[i] = NH3Heat(tl[lay]); cp_c[i] = NH3Heat(tl[lay]); MM_cp-=xx[lay][9];  cpxx-=xx[lay][9]*NH3Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
+        printf("STEP 4.%d: Processing condensible species %d\n", i+1, CONDENSIBLES[i]);
+        printf("  Before: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
+        
+        if(CONDENSIBLES[i]==7)  {
+            cp_v[i] = H2OHeat(tl[lay]); //heat capacity of water vapor
+            cp_c[i] = H2OHeat(tl[lay]); //heat capacity of condensed water
+            MM_cp-=xx[lay][7];  // SUBTRACT H2O number density from total number density
+            cpxx-=xx[lay][7]*H2OHeat(tl[lay]); // SUBTRACT H2O heat capacity contribution from total heat capacity
+            alpha[i] = 1.0;
+        }
+        if(CONDENSIBLES[i]==9)  {
+            cp_v[i] = NH3Heat(tl[lay]); cp_c[i] = NH3Heat(tl[lay]); 
+            MM_cp-=xx[lay][9];  // SUBTRACT NH3 number density  
+            cpxx-=xx[lay][9]*NH3Heat(tl[lay]); // SUBTRACT NH3 heat capacity contribution
+            alpha[i] = 1.0;
+        }
         if(CONDENSIBLES[i]==20) {cp_v[i] = COHeat(tl[lay]);  cp_c[i] = COHeat(tl[lay]);  MM_cp-=xx[lay][20]; cpxx-=xx[lay][20]*COHeat(tl[lay]); 
             alpha[i] = 1.0;} //alpha assumed
         if(CONDENSIBLES[i]==21) {cp_v[i] = CH4Heat(tl[lay]); cp_c[i] = CH4Heat(tl[lay]); MM_cp-=xx[lay][21]; cpxx-=xx[lay][21]*CH4Heat(tl[lay]); 
@@ -164,29 +232,28 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
             alpha[i] = 1.0;} //alpha assumed
         if(CONDENSIBLES[i]==55) {cp_v[i] = N2Heat(tl[lay]);  cp_c[i] = N2Heat(tl[lay]); MM_cp-=xx[lay][55];  cpxx-=xx[lay][55]*N2Heat(tl[lay]); 
             alpha[i] = 1.0;} //alpha assumed
-    latent[i] = ms_latent(CONDENSIBLES[i],tl[lay]);
-    beta[i] =  latent[i] / R_GAS / tl[lay];
-    if(dp[i]>0.0) cp_d = cpxx / MM_cp; //now the non-condensing portion of moist adiabat
-
-    //if(lay==1 || dp[i]>0.0) printf("%s%e\n","cp_d = ",cp_d);
-    //if(lay==1 || dp[i]>0.0) printf("%s%e\n","cp_v = ",cp_v[0]);
-    //if(lay==1 || dp[i]>0.0) printf("%s%e\n","cp_c = ",cp_c[0]);
-    //if(lay==1 || dp[i]>0.0) printf("%s%d%s\t%e\n","latent[",i,"] = ",latent[i]);
-    //if(lay==1 || dp[i]>0.0) printf("%s%d%s\t%e\n","alpha[",i,"] = ",alpha[i]);
-    //if(lay==1 || dp[i]>0.0) printf("%s%d%s\t%e\n","beta[",i,"] = ",beta[i]);
-/*    if(lay==1) printf("%s%e\n","cp_d = ",cp_d);
-    if(lay==1) printf("%s%e\n","cp_v = ",cp_v[0]);
-    if(lay==1) printf("%s%e\n","cp_c = ",cp_c[0]);
-    if(lay==1) printf("%s%d%s\t%e\n","latent[",i,"] = ",latent[i]);
-    if(lay==1) printf("%s%d%s\t%e\n","alpha[",i,"] = ",alpha[i]);
-    if(lay==1) printf("%s%d%s\t%e\n","beta[",i,"] = ",beta[i]);
-*/    
+    
+        // Calculate latent heat of the condensible species
+        latent[i] = ms_latent(CONDENSIBLES[i],tl[lay]);
+        beta[i] =  latent[i] / R_GAS / tl[lay];
+        
+        printf("  After: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
     }
+    
+    // After subtracting the condensable species, calculate cp_d ONCE:
+    cp_d = cpxx / MM_cp;  // Now cp_d = average heat capacity of remaining (dry) species
+
+    printf("FINAL: cpxx=%.3e, MM_cp=%.3e, cp_d_final=%.3e\n", cpxx, MM_cp, cp_d);
+
+    // EQ 1 from Graham+2021 d ln T / d ln P = (x_d + Σx_{v,i}) / 
+                //(x_d * [c_d*x_d + Σ(x_{v,i}*(c_{v,i} - R*β_i + R*β_i²) + α_i*x_{c,i}*c_{c,i})] / 
+                // [R*(x_d + Σβ_i*x_{v,i})] + Σβ_i*x_{v,i})
     
     // Calculate adiabat:
     lapse_num = Xd;
     sum_beta_xv = 0.0;
-    big_sum_denom_num = cp_d * Xd;
+    big_sum_denom_num_left_term = cp_d * Xd;
+    big_sum_denom_num_right_term = 0.0;
     cp_num = cp_d*Xd;
     cp_denom = Xd;
 
@@ -195,12 +262,12 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     {
         lapse_num += Xv[i];
         sum_beta_xv += beta[i]*Xv[i];
-        big_sum_denom_num += Xv[i]*(cp_v[i] - R_GAS*beta[i] + R_GAS*beta[i]*beta[i]) + alpha[i]*Xc[i]*cp_c[i];
+        big_sum_denom_num_right_term += Xv[i]*(cp_v[i] - R_GAS*beta[i] + R_GAS*beta[i]*beta[i]) + alpha[i]*Xc[i]*cp_c[i];
         cp_num +=  Xv[i]*cp_v[i] + alpha[i]*Xc[i]*cp_c[i];
         cp_denom += Xv[i];
     }
 
-    lapse_denom = Xd * big_sum_denom_num / (R_GAS*(Xd + sum_beta_xv)) + sum_beta_xv;
+    lapse_denom = Xd * (big_sum_denom_num_left_term + big_sum_denom_num_right_term) / (R_GAS*(Xd + sum_beta_xv)) + sum_beta_xv;
 
     lapse[lay] = lapse_num / lapse_denom;
 
@@ -213,13 +280,27 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
 //    if(lay==1) printf("%s%e\n","lapse = ",lapse[lay]);
 
     //propagate compositional changes back to main program 
+    // this is where the rainout needs to happen
     for (i=0; i<NCONDENSIBLES; i++)
     {
-        if(dp[i]>0.0)
+        if(Xc[i]>0.0) // if condensation detected, then remove gas fraction from gas phase
         {
+            //reduce gas fraction by Xv which is the ramaining uncondensed fraction
             xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay]; //since xv set to 0.0 if unsaturated
         }
+        //New implementation with no reset
+        else
+        {
+            // Always update gas abundance for evaporation too
+            // This ensures mass conservation when clouds evaporate
+            xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
+            printf("DEBUG: Layer %d, Species %d - Updated gas after evaporation: xx = %.6e, Xv = %.6e, MM = %.6e\n",
+                   lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]], Xv[i], MM[lay]);
+        }
+        // Here it resets cloud abundance to zero if nothing is condensing, that is if Xc become 0
         clouds[lay][CONDENSIBLES[i]] = alpha[i] * Xc[i] * MM[lay]; //if unsaturated, then clouds should dissolve?
+        printf("DEBUG: Layer %d, Species %d - Final state: gas = %.6e, cloud = %.6e\n",
+               lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]], clouds[lay][CONDENSIBLES[i]]);
     }
 
     //Now correct all xx for any rained out molecules:
@@ -234,7 +315,8 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         // more consistent would be to adjust MM down - and Presuure with it. But careful with scenarios where Psurf is a function of psat*RH dependent ocean evaporation
     }
 
-//    printf("%s %d %s %d\n","ms_ncl",*ncl,"ms_nrl",*nrl);
+    // Cloud data is now written at the end of the full calculation process
+    // rather than during individual layer processing
 }// END: void ms_adiabat()
 //*********************************************************
 //*********************************************************
@@ -669,3 +751,4 @@ double ms_latent(int mol, double temp)
 
 //atexit(pexit);exit(0); //ms debugging mode
 //printf("%s\n", "HERE"); //template
+

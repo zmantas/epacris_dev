@@ -9,6 +9,9 @@ import os
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 
+# Create necessary directories
+os.makedirs('output', exist_ok=True)
+
 # Read the data file
 case_name = 'AlphaAb'
 case_number = 100  # Default case number for FastChem data
@@ -18,7 +21,19 @@ temp_profile_file = f'../Results/{case_name}/NewTemperature.dat'
 helios_profile_file = f'HELIOS_output/{case_name}/00100.txt'
 species_file = '../Condition/SpeciesList/species_helios_comp3.dat'
 fastchem_file = f'HELIOS_output/{case_name}/fc_00100/EQ.txt'  # Define FastChem file path here
+cloud_file = f'../Results/{case_name}/Diagnostic_condens.dat'  # Add cloud data file
 data = pd.read_csv(filename, sep='\t', skiprows=2, header=None)
+
+# Read cloud data
+try:
+    cloud_data = pd.read_csv(cloud_file, sep='\t', header=0)
+    print(f"Successfully loaded cloud data from {cloud_file}")
+    print("Cloud data columns:")
+    for col in cloud_data.columns:
+        print(f"  {col}")
+except Exception as e:
+    print(f"Warning: Could not load cloud data: {e}")
+    cloud_data = None
 
 # Read temperature profile data
 try:
@@ -139,6 +154,31 @@ else:
 
 print("--------------------------\n")
 
+# Extract cloud molecular abundances for species 7 (water)
+cloud_molec_abundance = None
+cloud_pressure_bar = None
+
+# if cloud_data is not None:
+#     try:
+#         # Find the column with nCloudsMolec[7]
+#         cloud_molec_col = [col for col in cloud_data.columns if 'Molec' in col and '7' in col]
+#         if cloud_molec_col:
+#             cloud_molec_col = cloud_molec_col[0]
+#             print(f"Found cloud molecular abundance column: {cloud_molec_col}")
+#             cloud_molec_abundance = cloud_data[cloud_molec_col].values
+            
+#             # Extract pressure data
+#             if 'log(P)' in cloud_data.columns:
+#                 # Convert log10(Pa) to bar
+#                 cloud_pressure_bar = 10**cloud_data['log(P)'].values / 1.0e5
+#                 print(f"Successfully extracted cloud data for plotting")
+#                 print(f"Cloud pressure range: {cloud_pressure_bar.min():.2e} - {cloud_pressure_bar.max():.2e} bar")
+#                 print(f"Non-zero cloud molecular abundances: {np.sum(cloud_molec_abundance > 0)}")
+#         else:
+#             print("Warning: Could not find cloud molecular abundance column for species 7")
+#     except Exception as e:
+#         print(f"Error processing cloud data: {e}")
+
 # Define colors for cycling through - using a larger set of distinct colors
 # Combine basic colors with more sophisticated colormaps for better distinction
 import matplotlib.cm as cm
@@ -201,7 +241,7 @@ top_15_species = sorted(top_species.items(), key=lambda x: x[1], reverse=True)[:
 # Convert pressure from Pa to bar (1 bar = 100,000 Pa)
 pressure_bar = pressure / 1.0e5
 
-# Create a figure with three subplots
+# Create a figure with two subplots
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 8))
 
 # Left panel - Volume mixing ratios from EPACRIS
@@ -215,9 +255,20 @@ for i, (species_idx, avg_vmr) in enumerate(top_15_species):
     # Get a unique color that hasn't been used yet
     color = get_unique_color(i, used_colors)
     used_colors.append(color)
-    species_colors[species_name.lower()] = color  # Store color by species name for matching
+    species_colors[species_idx] = color  # Store color by species index for matching with cloud data
+    species_colors[species_name.lower()] = color  # Also store by species name for FastChem matching
     label = f"{species_name} ({avg_vmr:.2e})"
     ax1.loglog(vmr[species_idx], pressure_bar, linestyle='solid', color=color, linewidth=2, label=label)
+
+# Plot cloud molecular abundance data if available
+if cloud_molec_abundance is not None and cloud_pressure_bar is not None and np.any(cloud_molec_abundance > 0):
+    # Use the same color as water vapor (species 7) if available
+    cloud_color = species_colors.get(7, 'r')  # Default to red if water color not found
+    
+    # Plot condensed molecules with dotted line
+    ax1.loglog(cloud_molec_abundance, cloud_pressure_bar, linestyle='dotted', color=cloud_color, 
+              linewidth=3, label=f"H2O Condensed Molecules")
+    print("Added condensed H2O molecular abundance to plot")
 
 # Try to add FastChem species to the same plot
 try:
@@ -291,7 +342,7 @@ except Exception as e:
 ax1.invert_yaxis()  # Invert y-axis to have pressure increasing downward
 ax1.set_xlabel('Volume Mixing Ratio', fontsize=14)
 ax1.set_ylabel('Pressure [bar]', fontsize=14)
-ax1.set_title('Volume Mixing Ratios (solid: EPACRIS, dashed: FastChem)', fontsize=16)
+ax1.set_title('Volume Mixing Ratios (solid: gas, dotted: condensed molecules, dashed: FastChem)', fontsize=16)
 
 # Set axis limits for VMR plot
 ax1.set_xlim(1e-14, 1)

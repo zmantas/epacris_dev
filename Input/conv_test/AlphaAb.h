@@ -28,7 +28,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define RadConv_Solver  1   // 0 = Guillot TP profile
                             // 1 = Radiative Convective Climate
 //- IF RadConv_Solver = 1 --------------------------------------------- 
-#define TIME_STEPPING   0   // 0 = matrix solver for RT fluxes
+#define TIME_STEPPING   1   // 0 = matrix solver for RT fluxes
                             // 1 = time stepping for RT fluxes
 #define TS_SCHEME       1   // 0 = testing
                             // 1 = HELIOS scheme (code but not publication)
@@ -59,9 +59,9 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Iteration Conditions */
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     7       /* Maximum Radiative - Convective Iterations, minimum 1 */
+#define NMAX_RC     10       /* Maximum Radiative - Convective Iterations, minimum 1 */
 #define NMAX_RT     300  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      30  /*RT steps between Convective adjustments after initial RT equilibrium */
+#define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium */
 #define PRINT_ITER  100  //x steps to print parameters
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)

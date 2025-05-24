@@ -516,7 +516,7 @@ void reinterpolate_cia() {
 		if (tfitting[i] < 100.0) tfitting[i] = 100.0;
 	}
 	
-	printf("Reinterpolating CIA opacities...\n");
+	//printf("Reinterpolating CIA opacities...\n");
 	
 	// Get each CIA file and reinterpolate if loaded
 	CIAFile* h2h2_file = get_cia_file("H2-H2");
@@ -627,7 +627,7 @@ void reinterpolate_cia() {
 		}
 	}
 	
-	printf("CIA opacity reinterpolation complete\n");
+	//printf("CIA opacity reinterpolation complete\n");
 }
 
 // Clean up allocated memory
