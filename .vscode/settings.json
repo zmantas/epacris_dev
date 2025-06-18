@@ -6,5 +6,6 @@
         "55cnce_comp3_f025.h": "c",
         "global_temp.h": "c",
         "constant.h": "c"
-    }
+    },
+    "cmake.ignoreCMakeListsMissing": true
 }

@@ -4,9 +4,14 @@ import os
 import sys
 import pandas as pd
 
-# Get step count and output directory from command line arguments
+# Get step count, output directory, and NMAX iteration from command line arguments
+if len(sys.argv) != 4:
+    print("Usage: python live_plot.py <step_count> <live_plot_dir> <nmax_iteration>")
+    sys.exit(1)
+    
 total_step_count = int(sys.argv[1])
 live_plot_dir = sys.argv[2]
+nmax_iteration = int(sys.argv[3])
 
 # Path to species mapping file (adjust as needed)
 species_file = 'Condition/SpeciesList/species_helios_comp3.dat'
@@ -32,18 +37,66 @@ data = np.loadtxt('plot_scripts/temp_data.txt', skiprows=1)  # Skip header row
 t_new = data[:, 0]
 pressure = data[:, 1]  # Pressure in bar
 
+# Read radiative diagnostics from file comments
+radiative_diagnostics = {}
+convergence_tolerances = {}
+with open('plot_scripts/temp_data.txt', 'r') as f:
+    for line in f:
+        if line.startswith('# RADIATIVE_DIAGNOSTICS:'):
+            # Updated to parse the new radiation flux values
+            parts = line.split()
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=')
+                    try:
+                        radiative_diagnostics[key] = float(value)
+                    except ValueError:
+                        pass
+        elif line.startswith('# CONVERGENCE_TOLERANCES:'):
+            parts = line.split()
+            for part in parts:
+                if '=' in part:
+                    key, value = part.split('=')
+                    try:
+                        convergence_tolerances[key] = float(value)
+                    except ValueError:
+                        pass
+
 # Get species numbers from header
 with open('plot_scripts/temp_data.txt', 'r') as f:
     header = f.readline().strip('# \n').split()
 
-# Separate gas species and cloud species
+# Parse column headers for different data types
 gas_indices = []
 cloud_indices = []
 gas_species_numbers = []
 cloud_species_numbers = []
+saturation_ratio_indices = []
+saturation_ratio_species = []
+cp_index = None
+lapse_index = None
+isconv_index = None
+pot_temp_index = None
 
 for i, col_name in enumerate(header[2:], 2):  # Skip Temperature and Pressure
-    if col_name.startswith('c'):
+    if col_name == 'cp':
+        # This is the heat capacity column
+        cp_index = i
+    elif col_name == 'lapse':
+        # This is the lapse rate column
+        lapse_index = i
+    elif col_name == 'isconv':
+        # This is the convective layer flag column
+        isconv_index = i
+    elif col_name == 'pot_temp':
+        # This is the potential temperature column
+        pot_temp_index = i
+    elif col_name.startswith('sat_ratio_'):
+        # This is a saturation ratio column (e.g., sat_ratio_7, sat_ratio_9)
+        saturation_ratio_indices.append(i)
+        species_num = int(col_name.split('_')[2])  # Extract species number from sat_ratio_X
+        saturation_ratio_species.append(species_num)
+    elif col_name.startswith('c'):
         # This is a cloud species (with 'c' prefix)
         cloud_indices.append(i)
         cloud_species_numbers.append(int(col_name[1:]))  # Remove 'c' prefix to get species number
@@ -52,9 +105,29 @@ for i, col_name in enumerate(header[2:], 2):  # Skip Temperature and Pressure
         gas_indices.append(i)
         gas_species_numbers.append(int(col_name))
 
-# Extract gas and cloud data
+# Extract gas, cloud, heat capacity, lapse rate, potential temperature, saturation ratio, and convective data
 gas_data = data[:, gas_indices]
 cloud_data = data[:, cloud_indices]
+if saturation_ratio_indices:
+    saturation_ratio_data = data[:, saturation_ratio_indices]
+else:
+    saturation_ratio_data = None
+
+if cp_index is not None:
+    cp_data = data[:, cp_index]
+
+if lapse_index is not None:
+    lapse_data = data[:, lapse_index]
+
+if pot_temp_index is not None:
+    pot_temp_data = data[:, pot_temp_index]
+
+if isconv_index is not None:
+    isconv_data = data[:, isconv_index].astype(int)
+    num_convective_layers = np.sum(isconv_data)
+else:
+    isconv_data = None
+    num_convective_layers = 0
 
 # Calculate average VMR for each gas species (excluding zeros and NaNs)
 gas_avg_vmr = {}
@@ -68,14 +141,186 @@ for i, col_idx in enumerate(gas_indices):
 # Get top 10 gas species by average VMR
 top_10_gas = sorted(gas_avg_vmr.items(), key=lambda x: x[1], reverse=True)[:10]
 
-# Create figure with two subplots
-fig = plt.figure(figsize=(20, 10))
-gs = fig.add_gridspec(1, 2, width_ratios=[1, 1])  # Equal width panels
+# Create figure with four subplots - add saturation ratios
+fig = plt.figure(figsize=(26, 8))  # Wider to accommodate fourth panel
+gs = fig.add_gridspec(1, 4, width_ratios=[1, 1, 1, 1], wspace=0.2)  
 ax1 = fig.add_subplot(gs[0])  # Temperature plot
 ax2 = fig.add_subplot(gs[1])  # Abundance plot
+ax3 = fig.add_subplot(gs[2])  # Heat capacity plot
+ax4 = fig.add_subplot(gs[3])  # Saturation ratio plot
 
 # Temperature plot
-ax1.plot(t_new, pressure, 'k-', linewidth=3, label='Temperature')
+# First, plot the complete continuous temperature profile
+ax1.plot(t_new, pressure, 'k-', linewidth=3, label='Temperature Profile')
+
+# Add potential temperature if available
+if pot_temp_index is not None:
+    # Filter out zero/very small potential temperature values (which occur in radiative layers)
+    pot_temp_plot = np.copy(pot_temp_data)
+    pot_temp_plot[pot_temp_plot < 1.0] = np.nan  # Set very small values to NaN for cleaner plotting
+    ax1.plot(pot_temp_plot, pressure, 'g--', linewidth=2, alpha=0.8, label='Potential Temperature')
+
+# Mark convective layers if data is available
+if isconv_data is not None:
+    # Create mask for convective layers
+    convective_mask = isconv_data == 1
+    
+    # Overlay convective layers with red markers and thicker segments
+    if np.any(convective_mask):
+        # Plot red circles on convective layers
+        ax1.scatter(t_new[convective_mask], pressure[convective_mask], 
+                   c='red', s=40, alpha=0.8, zorder=5, marker='o',
+                   label=f'Convective layers ({num_convective_layers})')
+        
+        # Optionally add a thicker red line segment over convective parts
+        # This creates a visual emphasis without breaking continuity
+        for i in range(len(t_new)):
+            if convective_mask[i]:
+                # Draw short red line segments for convective layers
+                if i > 0:
+                    ax1.plot([t_new[i-1], t_new[i]], [pressure[i-1], pressure[i]], 
+                            'r-', linewidth=6, alpha=0.6, zorder=3)
+
+# Add text showing number of convective layers
+# ax1.text(0.02, 0.98, f'Convective layers: {num_convective_layers}', 
+#          transform=ax1.transAxes, fontsize=12, fontweight='bold',
+#          verticalalignment='top', horizontalalignment='left',
+#          bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+
+# Add radiative diagnostics box
+if radiative_diagnostics and convergence_tolerances:
+    # Calculate convergence status
+    rflux_max = radiative_diagnostics.get('Rfluxmax', 0.0)
+    drflux_max = radiative_diagnostics.get('dRfluxmax', 0.0)
+    rt_step = radiative_diagnostics.get('RTstep', 0)
+    equilib_layers = radiative_diagnostics.get('equilib_layers', 0)
+    ncl = radiative_diagnostics.get('ncl', 0)
+    nrl = radiative_diagnostics.get('nrl', 0)
+    
+    tol_rc = convergence_tolerances.get('Tol_RC', 1e-3)
+    tol_rc_r = convergence_tolerances.get('Tol_RC_R', 1e-3)
+    bb_flux = convergence_tolerances.get('BBflux', 1.0)
+    
+    # Calculate convergence ratios
+    flux_ratio = rflux_max / tol_rc if tol_rc > 0 else float('inf')
+    bb_flux_ratio = rflux_max / (tol_rc_r * bb_flux) if (tol_rc_r * bb_flux) > 0 else float('inf')
+    gradient_ratio = drflux_max / (0.2 * tol_rc) if tol_rc > 0 else float('inf')
+    
+    # Determine convergence status
+    converged = (flux_ratio < 1.0) or (bb_flux_ratio < 1.0) or (gradient_ratio < 1.0)
+    status_color = 'lightgreen' if converged else 'lightcoral'
+    status_text = 'CONVERGED' if converged else 'ITERATING'
+    
+    # Enhanced climate balance calculations
+    # Calculate global energy balance indicators
+    stefan_boltzmann = 5.67e-8  # W m^-2 K^-4
+    
+    # Surface temperature (bottom of atmosphere)
+    t_surface = t_new[0] if len(t_new) > 0 else 0.0
+    
+    # TOA temperature (top of atmosphere) 
+    t_toa = t_new[-1] if len(t_new) > 0 else 0.0
+    
+    # Estimate outgoing longwave radiation from surface temperature
+    olr_surface = stefan_boltzmann * t_surface**4 if t_surface > 0 else 0.0
+    
+    # Estimate effective TOA radiation from TOA temperature  
+    olr_toa = stefan_boltzmann * t_toa**4 if t_toa > 0 else 0.0
+    
+    # Get actual stellar radiation from EPACRIS
+    incoming_flux = radiative_diagnostics.get('radiationI0', 0.0) # TOA incoming flux [W/m²]
+    boa_incoming_flux = radiative_diagnostics.get('radiationI1', 0.0) # BOA incoming flux [W/m²]  
+    toa_net_flux = radiative_diagnostics.get('radiationO', 0.0) # TOA NET flux (upward-downward) [W/m²]
+    # IMPORTANT: radiationO = NetFlux[0][0] = upward_flux - downward_flux
+    # Negative values = planet gaining energy, Positive values = planet losing energy
+    
+    # Energy balance percentage (how close are we to equilibrium?)
+    # Perfect equilibrium means net flux = 0
+    # Use actual TOA net flux if available
+    if 'radiationO' in radiative_diagnostics and incoming_flux > 0.0:
+        # Energy balance based on how close net flux is to zero relative to incoming flux
+        energy_balance_pct = (1.0 - abs(toa_net_flux) / incoming_flux) * 100
+    else:
+        # Fall back to using flux residual vs blackbody flux
+        energy_balance_pct = (1.0 - abs(rflux_max) / bb_flux) * 100 if bb_flux > 0 else 0.0
+    energy_balance_pct = max(0.0, min(100.0, energy_balance_pct))  # Clamp to 0-100%
+    
+    # Temperature stability (difference between current surface/TOA temps)
+    temp_gradient = abs(t_surface - t_toa) if (t_surface > 0 and t_toa > 0) else 0.0
+    
+    # Format diagnostic information 
+    diag_text = f"Energy Balance: {energy_balance_pct:.1f}%\n"
+    
+    # Status based on energy balance
+    if energy_balance_pct >= 95:
+        status_text = "EXCELLENT"
+        status_color = 'green'
+    elif energy_balance_pct >= 85:
+        status_text = "GOOD"
+        status_color = 'darkgreen'
+    elif energy_balance_pct >= 70:
+        status_text = "FAIR"
+        status_color = 'orange'
+    else:
+        status_text = "POOR"
+        status_color = 'red'
+    
+    diag_text += f"Status: {status_text}\n\n"
+    
+    # Enhanced radiation budget section using actual values
+    diag_text += "Radiation Budget (W/m²):\n"
+    diag_text += f"TOA Incoming: {incoming_flux:.1e}\n"
+    if boa_incoming_flux != 0.0:
+        diag_text += f"BOA Incoming: {boa_incoming_flux:.1e}\n"
+    if 'radiationO' in radiative_diagnostics:
+        # Calculate outgoing flux from net flux
+        toa_outgoing_flux = incoming_flux - toa_net_flux
+        diag_text += f"TOA Outgoing: {toa_outgoing_flux:.1e}\n"
+        diag_text += f"TOA Net (In-Out): {toa_net_flux:.1e}\n"
+        # Physical interpretation
+        if toa_net_flux > 1e-6:  # Small threshold for floating point precision
+            diag_text += f"Status: Planet losing energy\n"
+        elif toa_net_flux < -1e-6:
+            diag_text += f"Status: Planet gaining energy\n"
+        else:
+            diag_text += f"Status: Near equilibrium\n"
+    else:
+        # Fallback to surface OLR estimates
+        diag_text += f"Surface OLR: {olr_surface:.1e}\n"
+        diag_text += f"TOA OLR: {olr_toa:.1e}\n"
+        net_balance = incoming_flux - olr_toa
+        diag_text += f"Net Balance: {net_balance:.1e}\n"
+    
+    diag_text += "\n"
+    
+    # Enhanced error metrics section 
+    diag_text += f"Error Metrics:\n"
+    diag_text += f"Max flux error: {rflux_max:.2e} W/m²\n"
+    diag_text += f"Max flux gradient: {drflux_max:.2e}\n"
+    
+    # Convergence info
+    diag_text += f"Convergence Info:\n"
+    diag_text += f"RT Step: {int(rt_step):d}\n"
+    diag_text += f"Equilibrium layers: {int(equilib_layers):d}/{int(equilib_layers + ncl):d}\n"
+    
+    # Thermal structure 
+    diag_text += f"Thermal Structure:\n"
+    diag_text += f"Surface temp: {t_surface:.1f} K\n"
+    diag_text += f"TOA temp: {t_toa:.1f} K\n"
+    temp_gradient = abs(t_surface - t_toa) if (t_surface > 0 and t_toa > 0) else 0.0
+    diag_text += f"Temp gradient: {temp_gradient:.1f} K\n\n"
+    
+    # Convection summary
+    diag_text += f"Convection:\n"
+    diag_text += f"Convective: {int(ncl):d} layers\n"
+    diag_text += f"Radiative: {int(nrl):d} layers"
+    
+    ax1.text(0.98, 0.98, diag_text, 
+             transform=ax1.transAxes, fontsize=9, fontweight='normal',
+             verticalalignment='top', horizontalalignment='right',
+             bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8),
+             color=status_color)
+
 ax1.set_yscale('log')
 ax1.set_ylim(max(pressure), min(pressure))
 ax1.set_xlim(0,1500)
@@ -83,7 +328,7 @@ ax1.set_xlabel('Temperature (K)', fontsize=12)
 ax1.set_ylabel('Pressure (Bar)', fontsize=12)
 ax1.set_title(f'Temperature Profile (Step {total_step_count})', fontsize=14)
 ax1.tick_params(axis='both', which='major', labelsize=10)
-ax1.legend(fontsize=10)
+ax1.legend(fontsize=9, loc='upper left')
 ax1.grid(True, alpha=0.3)
 
 # Create a dictionary to map species to colors for consistent coloring
@@ -128,10 +373,7 @@ for i, std_num in enumerate(cloud_species_numbers):
             linewidth=2,
             label=f"{name} (cloud, {avg_vmr:.2e})"
         )
-        print(f"Plotting cloud data for species {std_num} ({name})")
 
-if not has_clouds:
-    print("WARNING: No significant cloud abundances found to plot!")
 
 ax2.set_xscale('log')
 ax2.set_yscale('log')
@@ -139,11 +381,82 @@ ax2.set_ylim(max(pressure), min(pressure))
 ax2.set_xlim(1e-14, 1)
 ax2.set_xlabel('Volume Mixing Ratio', fontsize=12)
 ax2.set_ylabel('Pressure (Bar)', fontsize=12)
-ax2.set_title('Species Abundance', fontsize=14)
+ax2.set_title('Gas & Cloud Abundances', fontsize=14)
 ax2.tick_params(axis='both', which='major', labelsize=10)
-ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+ax2.legend(bbox_to_anchor=(0.5, 1.08), loc='center', fontsize=8, ncol=3)
 ax2.grid(True, alpha=0.3)
 
-plt.tight_layout()
-plt.savefig(f'{live_plot_dir}TP_profile_step_{total_step_count}.png', bbox_inches='tight')
+# Heat capacity and lapse rate plot with twin axes
+ax3.plot(cp_data, pressure, 'r-', linewidth=3, label='Heat Capacity')
+ax3.set_yscale('log')
+ax3.set_ylim(max(pressure), min(pressure))
+# Set reasonable x-limits for heat capacity (typical range for atmospheric gases)
+ax3.set_xlim(0, 100)
+ax3.set_xlabel('Heat Capacity (J mol⁻¹ K⁻¹)', fontsize=12, color='red')
+ax3.set_ylabel('Pressure (Bar)', fontsize=12)
+ax3.set_title('Heat Capacity & Lapse Rate', fontsize=14)
+ax3.tick_params(axis='both', which='major', labelsize=10)
+ax3.tick_params(axis='x', colors='red')
+ax3.grid(True, alpha=0.3)
+
+# Create twin axis for lapse rate
+if lapse_index is not None:
+    ax3_twin = ax3.twiny()
+    ax3_twin.plot(lapse_data, pressure, 'b-', linewidth=3, label='Lapse Rate')
+    ax3_twin.set_yscale('log')
+    ax3_twin.set_ylim(max(pressure), min(pressure))
+    # Set reasonable x-limits for lapse rate (typical values 0.1 to 1.0)
+    ax3_twin.set_xlim(0.1, 0.5)
+    ax3_twin.set_xlabel('Lapse Rate (d ln T / d ln P)', fontsize=12, color='blue')
+    ax3_twin.tick_params(axis='x', colors='blue')
+    
+    # Combined legend
+    lines1, labels1 = ax3.get_legend_handles_labels()
+    lines2, labels2 = ax3_twin.get_legend_handles_labels()
+    ax3.legend(lines1 + lines2, labels1 + labels2, fontsize=10, loc='upper right')
+else:
+    ax3.legend(fontsize=10)
+
+# Saturation ratio plot
+if saturation_ratio_data is not None and len(saturation_ratio_indices) > 0:
+    # Species names mapping for condensibles
+    condensible_names = {7: 'H₂O', 9: 'NH₃', 20: 'CO', 21: 'CH₄', 52: 'CO₂', 
+                        53: 'H₂', 54: 'O₂', 55: 'N₂'}
+    
+    colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+    
+    for i, species_num in enumerate(saturation_ratio_species):
+        sat_ratio = saturation_ratio_data[:, i]
+        color = colors[i % len(colors)]
+        name = condensible_names.get(species_num, f"Species {species_num}")
+        
+        ax4.plot(sat_ratio, pressure, color=color, linewidth=2, label=f"{name}")
+    
+    # Add vertical line at saturation ratio = 1.0 (equilibrium)
+    ax4.axvline(x=1.0, color='black', linestyle='--', linewidth=1, alpha=0.7, label='Saturation (S=1)')
+    
+    # Add shaded regions to highlight supersaturation (S>1) and subsaturation (S<1)
+    ax4.axvspan(1.0, 10, alpha=0.1, color='red', label='Supersaturated (S>1)')
+    ax4.axvspan(0.01, 1.0, alpha=0.1, color='blue', label='Subsaturated (S<1)')
+    
+    ax4.set_xscale('log')
+    ax4.set_yscale('log')
+    ax4.set_ylim(max(pressure), min(pressure))
+    ax4.set_xlim(0.01, 10)  # Reasonable range for saturation ratios
+    ax4.set_xlabel('Saturation Ratio (P/Psat)', fontsize=12)
+    ax4.set_ylabel('Pressure (Bar)', fontsize=12)
+    ax4.set_title('Saturation Ratios', fontsize=14)
+    ax4.tick_params(axis='both', which='major', labelsize=10)
+    ax4.legend(fontsize=9)
+    ax4.grid(True, alpha=0.3)
+else:
+    # If no saturation ratio data, show placeholder
+    ax4.text(0.5, 0.5, 'No Saturation\nRatio Data\nAvailable', 
+             transform=ax4.transAxes, fontsize=14, ha='center', va='center',
+             bbox=dict(boxstyle='round', facecolor='lightgray', alpha=0.5))
+    ax4.set_title('Saturation Ratios', fontsize=14)
+    ax4.set_xlabel('Saturation Ratio (P/Psat)', fontsize=12)
+    ax4.set_ylabel('Pressure (Bar)', fontsize=12)
+
+plt.savefig(f'{live_plot_dir}TP_profile_step_{nmax_iteration}_{total_step_count}.png', dpi=100)
 plt.close()

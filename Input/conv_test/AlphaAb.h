@@ -61,7 +61,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations */
 #define NMAX_RC     10       /* Maximum Radiative - Convective Iterations, minimum 1 */
 #define NMAX_RT     300  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium */
+#define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 #define PRINT_ITER  100  //x steps to print parameters
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)
@@ -74,7 +74,7 @@ Note: The parameters in this file can be modified to model different planets aro
 //------------------------------------
 //R_Planet = 1.95 R_E
 #define RADIUS_PLANET 6.9911E7    // m Planet's radius
-#define ORBIT      2.       // AU  Planet's semi-major axis, equivalent to around Sun
+#define ORBIT      2.2       // AU  Planet's semi-major axis, equivalent to around Sun
 
 /* Star spectrum */
 #define STAR_SPEC   "Library/Star/HELIOS/Alpha_A_spectra_converted.dat"
@@ -118,9 +118,34 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Molecular Species */
 #define SPECIES_LIST "Condition/SpeciesList/species_helios_comp3.dat"
-//- CONVECTION -----------------------
-#define NCONDENSIBLES 1  //how many potentially condensing species for moist adiabat, cloud formation, and rain-out
-#define CONDENSIBLES (int[]){7} //H2O=7; NH3=9; CO=20; CH4=21; CO2=52; H2=53; O2=54; N2=55
+//- CONVECTION-Condensation -----------------------
+#define CONDENSATION_MODE 1  // 0 = Manual (use predefined CONDENSIBLES list)
+                            // 1 = Automatic (dynamic detection based on saturation)
+                            // 2 = Hybrid (manual list + automatic validation)
+
+#define CONDENSATION_TIMING 2 // 0 = Detect once before RC loop (original)
+                             // 1 = Detect every RC iteration (dynamic)
+                             // 2 = Detect before loop + every NRT_RC iterations
+
+// For automatic mode - these will be set dynamically
+#define MAX_CONDENSIBLES 20  // Maximum number of species that could potentially condense
+
+#define NCONDENSIBLES_MANUAL 2  //how many potentially condensing species for manual mode
+#define CONDENSIBLES_MANUAL (int[]){7,9} //H2O=7; NH3=9; CO=20; CH4=21; CO2=52; H2=53; O2=54; N2=55
+
+
+
+// Automatic condensation detection parameters
+#define SATURATION_THRESHOLD 0.01  // Minimum saturation ratio to consider species condensible
+#define TEMP_RANGE_CHECK 1         // 1 = Check if temperature is in condensation range, 0 = skip check
+
+#define PRESSURE_CONSERVATION 0  // 1 = Realistic (pressure adjusts)
+                                // 0 = Open system (readjust mole fractions, constant pressure)
+#define ALPHA_RAINOUT 0.1        // Single alpha value for ALL condensible species (fraction retained after rainout)
+
+#define RAINOUT_MODE 1           // 0 = continuous (every iteration), 1 = single event, 2 = multiple events
+#define RAINOUT_TRIGGER_ITERATION 3  // RC iteration to trigger rainout event
+#define MAX_RAINOUT_EVENTS 1     // Maximum number of rainout events allowed
 
 /* Reaction List */
 #define REACTION_LIST "Condition/ReactionList/zone_general_CHO.dat"
@@ -128,8 +153,8 @@ Note: The parameters in this file can be modified to model different planets aro
 /* Radiative Convective Calculation*/
 #define IFRC        1        /* do we update radiative-convective boundary in each radiative balance iteration? */
 #define Tol_RC_T    1.0e-0  /* convergence tolerance in temperature, in Kelvin */
-#define Tol_RC_R    1.0E-3  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) */
-#define Tol_RC      1.0E-1  /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 (satisfying any of them is ok) */
+#define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) - RELAXED from 1e-3 */
+#define Tol_RC      1.0E+0  /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 - RELAXED from 1e-1 */
 #define Tol_FRATIO  1.0E-4  /* convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4 */
 
 //this is for matrix solver i think

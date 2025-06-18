@@ -177,7 +177,7 @@ void readcia() {
 			fclose(fim);
 			nl = s-1;
 			h2he_file->num_lines = nl;
-			printf("  Found %d lines of data\n", nl);
+			// printf("  Found %d lines of data\n", nl);
 			
 			cia = dmatrix(0, nl-1, 0, 19);
 			fim = fopen(crossfile, "r");
@@ -244,7 +244,7 @@ void readcia() {
 			fclose(fim);
 			nl = s-1;
 			h2h_file->num_lines = nl;
-			printf("  Found %d lines of data\n", nl);
+			// printf("  Found %d lines of data\n", nl);
 			
 			cia = dmatrix(0, nl-1, 0, 19);
 			fim = fopen(crossfile, "r");
@@ -311,7 +311,7 @@ void readcia() {
 			fclose(fim);
 			nl = s-1;
 			n2n2_file->num_lines = nl;
-			printf("  Found %d lines of data\n", nl);
+			// printf("  Found %d lines of data\n", nl);
 			
 			cia = dmatrix(0, nl-1, 0, 19);
 			fim = fopen(crossfile, "r");
@@ -378,7 +378,7 @@ void readcia() {
 			fclose(fim);
 			nl = s-1;
 			n2h2_file->num_lines = nl;
-			printf("  Found %d lines of data\n", nl);
+			// printf("  Found %d lines of data\n", nl);
 			
 			cia = dmatrix(0, nl-1, 0, 19);
 			fim = fopen(crossfile, "r");
@@ -445,7 +445,7 @@ void readcia() {
 			fclose(fim);
 			nl = s-1;
 			co2co2_file->num_lines = nl;
-			printf("  Found %d lines of data\n", nl);
+			// printf("  Found %d lines of data\n", nl);
 			
 			cia = dmatrix(0, nl-1, 0, 19);
 			fim = fopen(crossfile, "r");

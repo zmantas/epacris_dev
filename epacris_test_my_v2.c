@@ -98,6 +98,11 @@ double rt_drfluxmax_init;
 int RTstepcount;
 double THETAREF; //previously in input file, but redefined there as 'degrees' rather than radian
 
+// Dynamic condensibles management global variables
+int NCONDENSIBLES = 0;
+int CONDENSIBLES[MAX_CONDENSIBLES];
+// ALPHA_RAINOUT is now a single constant defined in AlphaAb.h
+
 #include "GetData.c"
 #include "chemequil.c"
 #include "Interpolation.c"
@@ -106,6 +111,7 @@ double THETAREF; //previously in input file, but redefined there as 'degrees' ra
 #include "TPPara.c"
 //#include "gasheat.c"
 #include "ms_gasheat.c"
+#include "condensed_heat.c"
 #include "GreyTemp.c"
 #include "ms_Climate_test_v1.c"
 
@@ -929,7 +935,7 @@ printf("%s\n\n",fillmi);
     if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET); 
     
     if(RadConv_Solver == 1) {
-        ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag); //ms22: 2stream switch added
+        ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,0); //ms22: 2stream switch added, NMAX iteration 0
         for (j=0; j<=zbin; j++) Tnew[j]=tempeq[j];
     }
 //**************************************************************
@@ -955,6 +961,15 @@ printf("%s\n\n",fillmi);
         
         /* If not converged, update */
         /* update */
+        
+        /* Reset clouds array to prevent accumulation between iterations */
+        for (j=1; j<=zbin; j++) {
+            for (ii=1; ii<=NSP; ii++) {
+                clouds[j][ii] = 0.0;
+            }
+        }
+        printf("%s\n", "Cloud array reset for new iteration");
+        
         for (j=0; j<=zbin; j++) {
             T[j] = Tnew[j];
             Tdoub[2*j] = T[j]; //ms2023: double grid
@@ -1001,7 +1016,7 @@ printf("%s\n\n",fillmi);
                     xx[j][labels[ii]]=MM[j]*mixequil[j][ii];
                     totalmix += mixequil[j][ii];
                 }
-                printf("%s %d %s %2.2f\n","Total mixing ratio at layer", j, "is", totalmix);
+                //printf("%s %d %s %2.2f\n","Total mixing ratio at layer", j, "is", totalmix);
             }
             free_dmatrix(mixequil,1,zbin,1,numx+numf);
         Convert2(Con, ConC, Conf, labelx, labelc, labelf);
@@ -1026,8 +1041,8 @@ printf("%s\n\n",fillmi);
             totalnumber += heliumnumber;
             totalmass += heliumnumber*4.0;
             meanmolecular[j] = totalmass/totalnumber;
-            printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer", j, "is", meanmolecular[j]);
-            printf("%s %d %s %2.2e\n","Helium mixing ratio at layer", j, "is", heliumnumber/totalnumber);
+                //printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer", j, "is", meanmolecular[j]);
+                //printf("%s %d %s %2.2e\n","Helium mixing ratio at layer", j, "is", heliumnumber/totalnumber);
         }
 
 
@@ -1042,7 +1057,7 @@ printf("%s\n\n",fillmi);
         if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET);
         
         if(RadConv_Solver == 1) {
-            ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag);
+            ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,i+1); // NMAX iteration i+1 (starts from 1)
             for (j=0; j<=zbin; j++) Tnew[j]=tempeq[j];
         }
         

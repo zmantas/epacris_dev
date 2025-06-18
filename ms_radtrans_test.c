@@ -18,9 +18,9 @@
 #include "toon_2stream.c" //ms: solving for radiative fluxes using Toon+89
 #include "mm_2stream.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
 
-void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[]);
+void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[], double *radiationI0_out, double *radiationI1_out, double *radiationO_out);
 
-void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[])
+void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[], double *radiationI0_out, double *radiationI1_out, double *radiationO_out)
 {
 
     int i=0, j, k, jj, l, j1, kk;
@@ -320,7 +320,7 @@ for (i=0;i<=zbin;i++)
                     TAUdoub[2*j] = (wa[j] + ws[j])/MM[j1]/AMU/meanmolecular[j1]/GA*(P[j1-1]-pl[j1])*1.0E-4; //ms2023: double grid
 		    //printf("%d\t%f\t%e\t%e\t%e\t%e\n",j, wavelength[i], tau[j],TAUdoub[2*j-1],TAUdoub[2*j],TAUdoub[2*j-1]+TAUdoub[2*j]); 
 		    //if(i%100==0) printf("%d\t%f\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\t%.12e\n",j, wavelength[i], tau[j], wa[j], ws[j], w[j], g[j],MM[j1],AMU,meanmolecular[j1],GA,P[j1-1],P[j1],Tvar[j][0],solar[i]); 
-		    //if(i>=6000 && i<8000) printf("%d\t%f\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\n",j, wavelength[i], tau[j], wa[j], ws[j], w[j], g[j],MM[j1],AMU,meanmolecular[j1],GA,P[j1-1],P[j1],Tvar[j][0],solar[i]); 
+		    //if(i>=6000 && i<8000) printf("%d\t%f\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\t%.22e\n",j, wavelength[i], tau[j], wa[j], ws[j], w[j], g[j],MM[j1],AMU,meanmolecular[j1],GA,P[j1-1],P[j1],Tvar[j][0],solar[i]); 
 		    //if(i%100==0) printf("%d\t%f %.12e %.12e %.12e %.12e %.12e\n",j, wavelength[i], tau[j], wa[j], ws[j], w[j], g[j]); 
 		}
 /* +++ OJO +++++++++++++++++++++++++++++++++++++++++++++++
@@ -343,6 +343,26 @@ for (i=0;i<=zbin;i++)
 //========================================================    
 //========================================================   
 //DEBUGG    printf("%s\n","Wavelength-loop DONE");
+
+// Calculate incoming stellar radiation by integrating solar spectrum
+radiationI0 = 0.0;  // TOA incoming flux
+radiationI1 = 0.0;  // BOA incoming flux
+
+// Apply zenith angle correction: cos(zenith_angle)
+double cos_zenith = cos(THETAREF);
+
+for (i=0; i<(NLAMBDA-1); i++) {
+    // For logarithmic wavelength grid, use proper integration
+    double lambda1 = wavelength[i];
+    double lambda2 = wavelength[i+1];
+    double dlambda = lambda2 - lambda1;  // Wavelength bin width in nm
+    
+    // Use trapezoidal rule for better accuracy
+    double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);  // Average flux in bin
+    
+    // TOA incoming flux: solar spectrum with zenith angle correction
+    radiationI0 += solar_flux_avg * dlambda * cos_zenith;
+}
 
 radiationO = NetFlux[0][0]; /* TOA net outgoing flux */
     /* Obtain the Flux and the Flux Jacobian, from bottom to up */
@@ -598,6 +618,11 @@ if (TS_SCHEME == 1){
     /*printf("%s\t%f\n", "Top-of-Atmosphere incoming radiation flux is", radiationI0);
     printf("%s\t%f\n", "Bottom-of-Atmospehre incoming radiation flux is", radiationI1);*/
     if (iter % PRINT_ITER == 0) printf("%s\t%f\n", "TOA outgoing net radiation flux is", radiationO);
+    
+    // Return radiation flux values for diagnostics
+    *radiationI0_out = radiationI0;
+    *radiationI1_out = radiationI1;
+    *radiationO_out = radiationO;
 	
 //atexit(pexit);exit(0); //ms debugging mode
 }

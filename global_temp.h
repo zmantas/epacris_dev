@@ -39,9 +39,32 @@ extern int    ReactionR[NKin+1][7], ReactionM[NKinM+1][5], ReactionP[NPho+1][9],
 extern int    numx, numc, numf, numa, waternum, waterx, numr, numm, numt, nump;
 extern double xx[zbin+1][NSP+1];
 extern double mkv[], Tnew[], Pnew[];
+extern double clouds[zbin+1][NSP+1]; // Cloud abundances for condensible species
 extern double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
 extern double MeanH2H2CIA[], MeanH2HeCIA[], MeanH2HCIA[], MeanN2H2CIA[], MeanN2N2CIA[],MeanCO2CO2CIA[];
 extern double SMeanH2H2CIA[], SMeanH2HeCIA[], SMeanH2HCIA[], SMeanN2H2CIA[], SMeanN2N2CIA[], SMeanCO2CO2CIA[];
+
+// Dynamic condensibles management variables
+extern int NCONDENSIBLES;
+extern int CONDENSIBLES[];
+// ALPHA_RAINOUT is now a single constant defined in AlphaAb.h
+
+// Additional global variables
+extern double Tdoub[];
+extern int RTstepcount;
+
+// Convection function declarations
+void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]);
+void ms_rainout(int lay, double* mass_loss_ratio);
+void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);
+void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]);
+
+// Dynamic condensation detection functions
+void initialize_condensibles_mode();
+int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure);
+void update_condensibles_list(int layer);
+void detect_condensibles_atmosphere();
+void report_condensibles_changes(int iteration);
 
 #endif /* !__GLOBAL_H__ */
 

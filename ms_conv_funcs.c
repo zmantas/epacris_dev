@@ -1,20 +1,26 @@
-/*******************************************************************
- * File: ms_conv_funcs.c
- * PURPOSE: compilation of main functions of convetion scheme update in 2022.
- * Original Author: Markus Scheucher (markus.scheucher@jpl.nasa.gov)
- * Version: v01, 2022: Original upload
- *******************************************************************
-*/                  
-
 #include <math.h>
 #include "constant.h"
+#include "condensed_heat.h"  // Include new condensed heat capacity functions
+
+// Note: Global variables for dynamic condensibles management are defined in the main file
+// NCONDENSIBLES and CONDENSIBLES[] are declared in global_temp.h
+// ALPHA_RAINOUT is a single constant value defined in AlphaAb.h
 
 //=========================================================
 //=== Function identifiers ================================
 
-void ms_adiabat(int lay, double lapse[], double xxHe, double* cp); // calculate lapse rate
+void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]); // calculate lapse rate (NO rainout)
+void ms_rainout(int lay, double* mass_loss_ratio); // apply rainout physics
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);   // Checks each pair of layers for convective stability
 void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]); // Adjust temperatures due to convection
+
+// New functions for dynamic condensation detection
+void initialize_condensibles_mode(); // Initialize condensibles based on CONDENSATION_MODE
+int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure); // Check if species should be condensible
+void update_condensibles_list(int layer); // Update condensibles list for a specific layer
+void detect_condensibles_atmosphere(); // Detect condensibles across entire atmosphere
+void report_condensibles_changes(int iteration); // Report changes in condensibles list
+
 //=== Helper function identifiers =========================
 double ms_psat_h2o(double temp); //calc saturation pressure of water
 double ms_psat_nh3(double temp); //calc saturation pressure
@@ -24,11 +30,12 @@ double ms_psat_co2(double temp); //calculate saturation pressure of carbon dioxi
 double ms_psat_h2(double temp); //calculate saturation pressure of hydrogen
 double ms_psat_o2(double temp); //calculate saturation pressure of oxygen
 double ms_psat_n2(double temp); //calculate saturation pressure of nitrogen
+double ms_psat_h2s(double temp); //calculate saturation pressure of hydrogen sulfide
 double ms_latent(int mol, double temp); //calc saturation pressure of water
 
 //=========================================================
 //=== Functions ===========================================
-void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
+void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[])
 {
 // Calculate adiabat acc. to Graham+2021 Eq.(1) 
 // The formulation below should be valid for dry, moist, and multi-species condensate conditions in dilute and non-dilute cases.
@@ -52,8 +59,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     double Xd,cp_d; //mole fraction of non-condensible gas, heat capacity of non-condensible gas
     double Xv[NCONDENSIBLES],Xvold,cp_v[NCONDENSIBLES]; //condensibles mol fractions in vapor form and heat cap. [Xvold is the old value of Xv]
     double Xc[NCONDENSIBLES],cp_c[NCONDENSIBLES]; //condensibles fractions in condensed form (Xc) and heat cap. (cp_c)
-    double alpha[NCONDENSIBLES]; // condensate mole fraction (1 - rain-out) --- assigned with heat capacities
-    double beta[NCONDENSIBLES], latent[NCONDENSIBLES]; // Latent heat and B=L/RT for each condensible
+    double alpha[NCONDENSIBLES], beta[NCONDENSIBLES], latent[NCONDENSIBLES]; // Latent heat and B=L/RT for each condensible
 
     //variables for condensation
     double psat[NCONDENSIBLES]; //saturation pressures
@@ -80,7 +86,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     //Assign mol fractions:
     for (i=0; i<NCONDENSIBLES; i++)
     {
-        if(lay==1) printf("%s%d%s\t%d\n","CONDENSIBLE[",i,"] = ",CONDENSIBLES[i]);
+        // if(lay==1) printf("%s%d%s\t%d\n","CONDENSIBLE[",i,"] = ",CONDENSIBLES[i]);
 
         //if(lay==1) printf("%s%d%s\t%e\n","Xv[",i,"] = ",Xv[i]); (debugging)
 
@@ -94,9 +100,9 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         if(CONDENSIBLES[i]==53) psat[i] = ms_psat_h2(tl[lay]);  // Condenses ~14K (triple point)
         if(CONDENSIBLES[i]==54) psat[i] = ms_psat_o2(tl[lay]);  // Condenses ~54K (triple point)
         if(CONDENSIBLES[i]==55) psat[i] = ms_psat_n2(tl[lay]);  // Condenses ~63K (triple point)
+        if(CONDENSIBLES[i]==45) psat[i] = ms_psat_h2s(tl[lay]);  // Condenses ~188K (triple point)
         /* Additional species that could be included:
         if(CONDENSIBLES[i]==43) psat[i] = ms_psat_so2(tl[lay]);  // Condenses ~198K (triple point)
-        if(CONDENSIBLES[i]==45) psat[i] = ms_psat_h2s(tl[lay]);  // Condenses ~188K (triple point)
         if(CONDENSIBLES[i]==99) psat[i] = ms_psat_s8(tl[lay]);   // Condenses ~388K (solid form)
         if(CONDENSIBLES[i]==27) psat[i] = ms_psat_c2h2(tl[lay]); // Condenses ~192K (triple point)
         if(CONDENSIBLES[i]==29) psat[i] = ms_psat_c2h4(tl[lay]); // Condenses ~104K (triple point)
@@ -117,7 +123,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
         Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles
 
         // Calculate total available condensible including condensed stuff
-        double Xtotal = Xv[i] + Xc[i];  // Total water (gas + cloud)
+        double Xtotal = Xv[i] + Xc[i];  // Total condensible (gas + cloud)
 
         // Calculate equilibrium partitioning
         double Xv_sat = psat[i] / pl[lay];  // Maximum gas phase at saturation
@@ -185,71 +191,165 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     //=======================================================================*//
 
 
-    //if(lay==1) printf("%s%e\n","xxHe = ",xxHe/MM[lay]);
     // STEP 1: Calculate total heat capacity of the ENTIRE atmosphere (all species)
     // cpxx = Σ(number_density × molar_heat_capacity) for ALL species  [molecules/cm³] × [J/(mol·K)]
     cpxx = xxHe*HeHeat(tl[lay])+xx[lay][7]*H2OHeat(tl[lay])+xx[lay][9]*NH3Heat(tl[lay])+
-        xx[lay][20]*COHeat(tl[lay])+xx[lay][21]*CH4Heat(tl[lay])+xx[lay][52]*CO2Heat(tl[lay])+
-        xx[lay][53]*H2Heat(tl[lay])+xx[lay][54]*O2Heat(tl[lay])+xx[lay][55]*N2Heat(tl[lay]);
+        xx[lay][20]*COHeat(tl[lay])+xx[lay][21]*CH4Heat(tl[lay])+xx[lay][45]*H2SHeat(tl[lay])+
+        xx[lay][52]*CO2Heat(tl[lay])+xx[lay][53]*H2Heat(tl[lay])+xx[lay][54]*O2Heat(tl[lay])+xx[lay][55]*N2Heat(tl[lay]);
         // potentially add more heat capacities of possible atmospheric species here
 
     // STEP 2: Calculate total number density of ALL species 
-    MM_cp = xxHe+xx[lay][7]+xx[lay][9]+xx[lay][20]+xx[lay][21]+xx[lay][52]+xx[lay][53]+xx[lay][54]+xx[lay][55];
+    MM_cp = xxHe+xx[lay][7]+xx[lay][9]+xx[lay][20]+xx[lay][21]+xx[lay][45]+xx[lay][52]+xx[lay][53]+xx[lay][54]+xx[lay][55];
     
     // STEP 3: Calculate average molar heat capacity of ENTIRE atmosphere
     cp_d = cpxx / MM_cp;
     
-    printf("STEP 1-3: cpxx=%.3e, MM_cp=%.3e, cp_d_initial=%.3e\n", cpxx, MM_cp, cp_d);
+    // if(lay==1) printf("STEP 1-3: cpxx=%.3e, MM_cp=%.3e, cp_d_initial=%.3e\n", cpxx, MM_cp, cp_d);
     
     // STEP 4: Loop through each condensible species to subtract them out from total heat capacity and number density
     for (i=0; i<NCONDENSIBLES; i++)
     {
-        printf("STEP 4.%d: Processing condensible species %d\n", i+1, CONDENSIBLES[i]);
-        printf("  Before: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
+        // if(lay==1)  printf("STEP 4.%d: Processing condensible species %d\n", i+1, CONDENSIBLES[i]);
+        // if(lay==1)  printf("  Before: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
         
         if(CONDENSIBLES[i]==7)  {
             cp_v[i] = H2OHeat(tl[lay]); //heat capacity of water vapor
-            cp_c[i] = H2OHeat(tl[lay]); //heat capacity of condensed water
+            cp_c[i] = H2O_liquid_heat_capacity(tl[lay]); //heat capacity of condensed water - NOW USING NEW LIBRARY
+            //if(lay==1) printf("H2O heat capacities - Vapor: %.3e, Liquid: %.3e\n", cp_v[i], cp_c[i]);
             MM_cp-=xx[lay][7];  // SUBTRACT H2O number density from total number density
             cpxx-=xx[lay][7]*H2OHeat(tl[lay]); // SUBTRACT H2O heat capacity contribution from total heat capacity
-            alpha[i] = 1.0;
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
         }
         if(CONDENSIBLES[i]==9)  {
-            cp_v[i] = NH3Heat(tl[lay]); cp_c[i] = NH3Heat(tl[lay]); 
+            cp_v[i] = NH3Heat(tl[lay]); 
+            cp_c[i] = NH3_liquid_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
             MM_cp-=xx[lay][9];  // SUBTRACT NH3 number density  
             cpxx-=xx[lay][9]*NH3Heat(tl[lay]); // SUBTRACT NH3 heat capacity contribution
-            alpha[i] = 1.0;
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
         }
-        if(CONDENSIBLES[i]==20) {cp_v[i] = COHeat(tl[lay]);  cp_c[i] = COHeat(tl[lay]);  MM_cp-=xx[lay][20]; cpxx-=xx[lay][20]*COHeat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==21) {cp_v[i] = CH4Heat(tl[lay]); cp_c[i] = CH4Heat(tl[lay]); MM_cp-=xx[lay][21]; cpxx-=xx[lay][21]*CH4Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==52) {cp_v[i] = CO2Heat(tl[lay]); cp_c[i] = CO2Heat(tl[lay]); MM_cp-=xx[lay][52]; cpxx-=xx[lay][52]*CO2Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==53) {cp_v[i] = H2Heat(tl[lay]);  cp_c[i] = H2Heat(tl[lay]);  MM_cp-=xx[lay][53]; cpxx-=xx[lay][53]*H2Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==54) {cp_v[i] = O2Heat(tl[lay]);  cp_c[i] = O2Heat(tl[lay]);  MM_cp-=xx[lay][54]; cpxx-=xx[lay][54]*O2Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
-        if(CONDENSIBLES[i]==55) {cp_v[i] = N2Heat(tl[lay]);  cp_c[i] = N2Heat(tl[lay]); MM_cp-=xx[lay][55];  cpxx-=xx[lay][55]*N2Heat(tl[lay]); 
-            alpha[i] = 1.0;} //alpha assumed
+        if(CONDENSIBLES[i]==20) {
+            cp_v[i] = COHeat(tl[lay]);  
+            cp_c[i] = CO_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][20]; 
+            cpxx-=xx[lay][20]*COHeat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==21) {
+            cp_v[i] = CH4Heat(tl[lay]); 
+            cp_c[i] = CH4_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][21]; 
+            cpxx-=xx[lay][21]*CH4Heat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==52) {
+            cp_v[i] = CO2Heat(tl[lay]); 
+            cp_c[i] = CO2_solid_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][52]; 
+            cpxx-=xx[lay][52]*CO2Heat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==53) {
+            cp_v[i] = H2Heat(tl[lay]);  
+            cp_c[i] = H2_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][53]; 
+            cpxx-=xx[lay][53]*H2Heat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==54) {
+            cp_v[i] = O2Heat(tl[lay]);  
+            cp_c[i] = O2_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][54]; 
+            cpxx-=xx[lay][54]*O2Heat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==55) {
+            cp_v[i] = N2Heat(tl[lay]);  
+            cp_c[i] = N2_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][55];  
+            cpxx-=xx[lay][55]*N2Heat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
+        
+        if(CONDENSIBLES[i]==45) {
+            cp_v[i] = H2SHeat(tl[lay]);  
+            cp_c[i] = H2S_condensed_heat_capacity(tl[lay]); // NOW USING NEW LIBRARY
+            MM_cp-=xx[lay][45];  
+            cpxx-=xx[lay][45]*H2SHeat(tl[lay]); 
+            alpha[i] = ALPHA_RAINOUT; // Use config-defined alpha value
+        }
     
         // Calculate latent heat of the condensible species
         latent[i] = ms_latent(CONDENSIBLES[i],tl[lay]);
         beta[i] =  latent[i] / R_GAS / tl[lay];
         
-        printf("  After: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
+
+        // This is an example of a possible physics based implementation with fall velocity
+        // can also do based on pressure.
+        // // PHYSICALLY-BASED RAINOUT CALCULATION
+        // // Calculate retention fraction alpha[i] based on fall velocity vs mixing time
+        // if (Xc[i] > 0.0) {
+        //     // Typical droplet/crystal sizes and fall velocities
+        //     double particle_radius, fall_velocity, mixing_time, fall_time;
+        //     double layer_thickness = 1000.0; // meters (typical layer thickness)
+        //     double atmospheric_density = pl[lay] / (R_GAS * tl[lay]) * 0.001; // kg/m³
+            
+        //     if (CONDENSIBLES[i] == 7) { // H2O
+        //         if (tl[lay] < 273.0) {
+        //             // Ice crystals
+        //             particle_radius = 50e-6;  // 50 microns
+        //             fall_velocity = 0.5;      // m/s (typical for ice crystals)
+        //         } else {
+        //             // Liquid droplets  
+        //             particle_radius = 10e-6;  // 10 microns
+        //             fall_velocity = 0.01;     // m/s (small droplets fall slowly)
+        //         }
+        //     } else if (CONDENSIBLES[i] == 52) { // CO2 (dry ice)
+        //         particle_radius = 100e-6;     // 100 microns
+        //         fall_velocity = 1.0;          // m/s (dense CO2 ice)
+        //     } else {
+        //         // Default for other species
+        //         particle_radius = 20e-6;      // 20 microns
+        //         fall_velocity = 0.1;          // m/s
+        //     }
+            
+        //     // Adjust fall velocity for atmospheric density
+        //     fall_velocity *= sqrt(atmospheric_density / 1.225); // Scale with air density
+            
+        //     // Calculate time scales
+        //     fall_time = layer_thickness / fall_velocity;      // Time to fall through layer
+        //     mixing_time = 3600.0;  // Assumed convective mixing time (1 hour)
+            
+        //     // Retention fraction: what stays vs what falls out
+        //     alpha[i] = mixing_time / (mixing_time + fall_time);
+            
+        //     // Apply bounds
+        //     if (alpha[i] < 0.01) alpha[i] = 0.01;  // Minimum 1% retention
+        //     if (alpha[i] > 0.99) alpha[i] = 0.99;  // Maximum 99% retention
+            
+        //     if (lay==1) printf("Rainout calc - Species %d: radius=%.1e m, vfall=%.3f m/s, tfall=%.0f s, alpha=%.3f\n",
+        //            CONDENSIBLES[i], particle_radius, fall_velocity, fall_time, alpha[i]);
+        // } else {
+        //     alpha[i] = 1.0;  // No condensate, so retention is irrelevant
+        // }
+        
+        //if(lay==1)  printf("  After: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
     }
     
     // After subtracting the condensable species, calculate cp_d ONCE:
     cp_d = cpxx / MM_cp;  // Now cp_d = average heat capacity of remaining (dry) species
 
-    printf("FINAL: cpxx=%.3e, MM_cp=%.3e, cp_d_final=%.3e\n", cpxx, MM_cp, cp_d);
+    //if(lay==1)  printf("FINAL: cpxx=%.3e, MM_cp=%.3e, cp_d_final=%.3e\n", cpxx, MM_cp, cp_d);
 
     // EQ 1 from Graham+2021 d ln T / d ln P = (x_d + Σx_{v,i}) / 
                 //(x_d * [c_d*x_d + Σ(x_{v,i}*(c_{v,i} - R*β_i + R*β_i²) + α_i*x_{c,i}*c_{c,i})] / 
                 // [R*(x_d + Σβ_i*x_{v,i})] + Σβ_i*x_{v,i})
     
-    // Calculate adiabat:
+    // Calculate adiabatic lapse rate
     lapse_num = Xd;
     sum_beta_xv = 0.0;
     big_sum_denom_num_left_term = cp_d * Xd;
@@ -257,14 +357,24 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
     cp_num = cp_d*Xd;
     cp_denom = Xd;
 
-    // Calculate adiabatic lapse rate
     for (i=0; i<NCONDENSIBLES; i++) 
     {
         lapse_num += Xv[i];
         sum_beta_xv += beta[i]*Xv[i];
         big_sum_denom_num_right_term += Xv[i]*(cp_v[i] - R_GAS*beta[i] + R_GAS*beta[i]*beta[i]) + alpha[i]*Xc[i]*cp_c[i];
         cp_num +=  Xv[i]*cp_v[i] + alpha[i]*Xc[i]*cp_c[i];
-        cp_denom += Xv[i];
+        cp_denom += Xv[i];  // CORRECT: Graham's paper denominator is (x_d + Σx_{v,i}) only
+        
+
+        // if (Xc[i] > 1.0e-10 && lay==120) {  // Debug output for any condensation, regardless of layer
+        //     printf("HEAT CAPACITY DEBUG - Layer %d, Species %d:\n", lay, CONDENSIBLES[i]);
+        //     printf("  Xv[%d] = %.6e, Xc[%d] = %.6e, alpha[%d] = %.3f\n", i, Xv[i], i, Xc[i], i, alpha[i]);
+        //     printf("  cp_v[%d] = %.3f J/(mol·K), cp_c[%d] = %.3f J/(mol·K)\n", i, cp_v[i], i, cp_c[i]);
+        //     printf("  Vapor contribution to cp_num: %.6e\n", Xv[i]*cp_v[i]);
+        //     printf("  Condensate contribution to cp_num: %.6e\n", alpha[i]*Xc[i]*cp_c[i]);
+        //     printf("  Running cp_num = %.6e, cp_denom = %.6e\n", cp_num, cp_denom);
+        //     printf("  Current effective cp = %.3f J/(mol·K)\n", cp_num/cp_denom);
+        // }
     }
 
     lapse_denom = Xd * (big_sum_denom_num_left_term + big_sum_denom_num_right_term) / (R_GAS*(Xd + sum_beta_xv)) + sum_beta_xv;
@@ -281,43 +391,202 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp)
 
     //propagate compositional changes back to main program 
     // this is where the rainout needs to happen
-    for (i=0; i<NCONDENSIBLES; i++)
-    {
-        if(Xc[i]>0.0) // if condensation detected, then remove gas fraction from gas phase
-        {
-            //reduce gas fraction by Xv which is the ramaining uncondensed fraction
-            xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay]; //since xv set to 0.0 if unsaturated
+    
+    // NO RAINOUT HERE - rainout is now handled separately in ms_rainout()
+    // Just set the gas and cloud phases based on current equilibrium
+    for (i=0; i<NCONDENSIBLES; i++) {
+        xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
+        clouds[lay][CONDENSIBLES[i]] = Xc[i] * MM[lay];
+        
+        // Calculate and store saturation ratios for plotting
+        // saturation_ratio = partial_pressure / saturation_pressure
+        double partial_pressure = Xv[i] * pl[lay];
+        if (psat[i] > 0.0) {
+            saturation_ratios[i] = partial_pressure / psat[i];
+        } else {
+            saturation_ratios[i] = 0.0;
         }
-        //New implementation with no reset
-        else
-        {
-            // Always update gas abundance for evaporation too
-            // This ensures mass conservation when clouds evaporate
-            xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
-            printf("DEBUG: Layer %d, Species %d - Updated gas after evaporation: xx = %.6e, Xv = %.6e, MM = %.6e\n",
-                   lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]], Xv[i], MM[lay]);
-        }
-        // Here it resets cloud abundance to zero if nothing is condensing, that is if Xc become 0
-        clouds[lay][CONDENSIBLES[i]] = alpha[i] * Xc[i] * MM[lay]; //if unsaturated, then clouds should dissolve?
-        printf("DEBUG: Layer %d, Species %d - Final state: gas = %.6e, cloud = %.6e\n",
-               lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]], clouds[lay][CONDENSIBLES[i]]);
     }
-
-    //Now correct all xx for any rained out molecules:
-    //removal of condensate through rain out would cause SUM(xx) /= 1.0 otherwise
-    //(or to date 07/2022 it would actually cause heliumfraction in ms_rad_conv to increase by (1-alpha)*Xc)
-    for (j=0; j<NSP+1; j++)
-    {
-        for (i=0; i<NCONDENSIBLES; i++)
-        {
-            xx[lay][j] = xx[lay][j] / (1 - ( 1-alpha[i])*Xc[i]); 
-        }
-        // more consistent would be to adjust MM down - and Presuure with it. But careful with scenarios where Psurf is a function of psat*RH dependent ocean evaporation
-    }
-
-    // Cloud data is now written at the end of the full calculation process
-    // rather than during individual layer processing
+    
 }// END: void ms_adiabat()
+//*********************************************************
+//*********************************************************
+void ms_rainout(int lay, double* mass_loss_ratio)
+{
+    // Apply rainout physics once per RC iteration
+    // This function handles the Graham+2021 rainout approach with proper mass conservation
+    
+    int i, j;
+    
+    // Get cloud and vapor amounts for condensible species
+    double Xv[NCONDENSIBLES], Xc[NCONDENSIBLES];
+    double alpha[NCONDENSIBLES]; // retention factors (must match ms_adiabat values)
+    
+    for (i=0; i<NCONDENSIBLES; i++) {
+        Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; // vapor phase mole fraction
+        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; // cloud phase mole fraction
+        
+        // Use config-defined alpha values - consistent with ms_adiabat
+        alpha[i] = ALPHA_RAINOUT;
+    }
+    
+    // Store original cloud amounts before modification
+    double Xc_original[NCONDENSIBLES];
+    for (i=0; i<NCONDENSIBLES; i++) {
+        Xc_original[i] = Xc[i];
+        //printf("RAINOUT: Layer %d, Species %d, Xc_original[%d] = %.6e\n", 
+        //       lay, CONDENSIBLES[i], i, Xc_original[i]);
+    }
+
+    // STEP 1: Update condensed species amounts after rainout
+    for (i=0; i<NCONDENSIBLES; i++) {
+        // adjust condensable fraction with alpha
+        Xc[i] = alpha[i] * Xc[i];
+        xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
+        clouds[lay][CONDENSIBLES[i]] = Xc[i] * MM[lay];
+
+        //printf("RAINOUT: Layer %d, Species %d, Xc[%d] = %.6e, Xv[%d] = %.6e, clouds[%d] = %.6e\n", 
+        //       lay, CONDENSIBLES[i], i, Xc[i], i, Xv[i], i, clouds[lay][CONDENSIBLES[i]]);
+    }
+
+        
+    // STEP 2: Update non-condensible species based on conservation approach
+    if (PRESSURE_CONSERVATION == 1) {
+        // REALISTIC APPROACH (Closed System):
+        // Non-condensibles maintain absolute abundance, mole fractions increase naturally
+        // No scaling needed - they're already physically correct
+        // Atmospheric mass loss will be tracked for pressure adjustment
+        
+        // Calculate total mass loss for pressure adjustment
+        double original_total_mass = 0.0;
+        double new_total_mass = 0.0;
+        double remaining_fraction = 0.0;
+        // Sum all current species abundances
+        for (j=1; j<=NSP; j++) {
+            new_total_mass += xx[lay][j];
+        }
+        
+        // Estimate original mass before rainout (approximate)
+        original_total_mass = new_total_mass / remaining_fraction;
+        
+        // Store mass loss ratio for pressure adjustment (global variable or pass back)
+        *mass_loss_ratio = new_total_mass / original_total_mass;
+        
+        if (lay==62) { // Debug output for top layer
+            printf("REALISTIC RAINOUT: Layer %d - Mass loss ratio: %.6f\n", lay, *mass_loss_ratio);
+            printf("  Original mass estimate: %.6e, New mass: %.6e\n", original_total_mass, new_total_mass);
+        }
+    } else {
+        // OPEN SYSTEM APPROACH: Maintain Graham+2021 constraint x_d + x_v + x_c = 1.0
+        // Layer-specific scaling: only species with clouds in THIS layer are exempt
+        // All other species (including condensibles without clouds here) get scaled
+        
+        // Calculate total mole fraction lost from cloud rainout in THIS layer
+        double total_mole_fraction_lost = 0.0;
+        for (i=0; i<NCONDENSIBLES; i++) {
+            total_mole_fraction_lost += (1.0 - alpha[i]) * Xc_original[i];
+        }
+
+        if (total_mole_fraction_lost > 0.0) {
+            // Identify which species actually have clouds in THIS layer
+            bool has_clouds_in_layer[NSP+1] = {false};  // Initialize all to false
+            for (i=0; i<NCONDENSIBLES; i++) {
+                if (clouds[lay][CONDENSIBLES[i]] > 1.0e-20) {  // Small threshold for numerical precision
+                    has_clouds_in_layer[CONDENSIBLES[i]] = true;
+                }
+            }
+            
+            // Calculate current mole fraction of species that will NOT be scaled
+            // (only those with actual clouds in this layer)
+            double unscaled_mf = 0.0;
+            for (j=1; j<=NSP; j++) {
+                if (has_clouds_in_layer[j]) {
+                    unscaled_mf += xx[lay][j]/MM[lay];
+                }
+            }
+            
+            // Calculate current mole fraction of species that WILL be scaled
+            // (everything else, including condensibles without clouds here)
+            double scalable_mf = 0.0;
+            for (j=1; j<=NSP; j++) {
+                if (!has_clouds_in_layer[j]) {
+                    scalable_mf += xx[lay][j]/MM[lay];
+                }
+            }
+            
+            // Calculate new cloud mole fraction (after rainout)
+            double new_cloud_mf = 0.0;
+            for (i=0; i<NCONDENSIBLES; i++) {
+                new_cloud_mf += clouds[lay][CONDENSIBLES[i]]/MM[lay];
+            }
+            
+            // Scale factor: remaining space divided by what needs to fit
+            double scale_factor = (1.0 - unscaled_mf - new_cloud_mf) / scalable_mf;
+            
+            if (lay==60) { // Debug output for mid-atmosphere layer
+                printf("OPEN SYSTEM RAINOUT: Layer %d\n", lay);
+                printf("  Cloud mole fraction lost: %.6e\n", total_mole_fraction_lost);
+                printf("  Unscaled species mole fraction: %.6e\n", unscaled_mf);
+                printf("  Scalable species mole fraction: %.6e\n", scalable_mf);
+                printf("  New cloud mole fraction: %.6e\n", new_cloud_mf);
+                printf("  Scale factor: %.6f\n", scale_factor);
+                
+                // Show which species have clouds in this layer
+                printf("  Species with clouds in this layer:");
+                for (j=1; j<=NSP; j++) {
+                    if (has_clouds_in_layer[j]) {
+                        printf(" %d", j);
+                    }
+                }
+                printf("\n");
+            }
+
+            // Scale only species that do NOT have clouds in this layer
+            for (j=1; j<=NSP; j++) {
+                if (!has_clouds_in_layer[j]) {
+                    xx[lay][j] *= scale_factor;
+                }
+                // Species with clouds in this layer remain unchanged
+            }
+            
+            if (lay==60) { // Verification
+                // Check that mole fractions sum to 1.0
+                double total_mole_fraction = 0.0;
+                
+                // Gas phase mole fractions
+                for (j=1; j<=NSP; j++) {
+                    total_mole_fraction += xx[lay][j]/MM[lay];
+                }
+                
+                // Condensed phase mole fractions (after rainout)
+                for (i=0; i<NCONDENSIBLES; i++) {
+                    total_mole_fraction += clouds[lay][CONDENSIBLES[i]]/MM[lay];
+                }
+                
+                printf("  Verification: Total mole fraction = %.6f (should be 1.0)\n", total_mole_fraction);
+                
+                // Show breakdown
+                double scaled_mf = 0.0, unscaled_mf_check = 0.0, cloud_mf = 0.0;
+                for (j=1; j<=NSP; j++) {
+                    if (has_clouds_in_layer[j]) {
+                        unscaled_mf_check += xx[lay][j]/MM[lay];
+                    } else {
+                        scaled_mf += xx[lay][j]/MM[lay];
+                    }
+                }
+                for (i=0; i<NCONDENSIBLES; i++) {
+                    cloud_mf += clouds[lay][CONDENSIBLES[i]]/MM[lay];
+                }
+                printf("  Breakdown: Scaled=%.6f, Unscaled=%.6f, Clouds=%.6f\n", 
+                       scaled_mf, unscaled_mf_check, cloud_mf);
+            }
+        }
+        
+        // For open system, no pressure adjustment needed (pressure stays fixed)
+        *mass_loss_ratio = 1.0;
+    }
+    
+}// END: void ms_rainout()
 //*********************************************************
 //*********************************************************
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl)
@@ -337,7 +606,13 @@ void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* nc
     {
 //        printf("%s %d%s %f%s%f\n","Layer",i,": Tabove=",tempb[i+1]," but adiabatically ",( tempb[i] * pow(P[i+1]/P[i],lapse[i+1])));
 //        if( tempb[i+1] < ( tempb[i] * pow(P[i+1]/P[i],lapse[i+1]) /0.98 ) )
-        if( tempb[i+1] < ( tempb[i] * pow(P[i+1]/P[i],lapse[i+1]) +1e-1) ) //for numerical stability
+        
+        // STABILITY FIX: Use larger tolerance to prevent oscillations at cloud decks
+        // where latent heating can cause rapid lapse rate changes
+        double stability_tolerance = 0.5;  // Increased from 0.1 K to 0.5 K
+        double adiabatic_temp = tempb[i] * pow(P[i+1]/P[i], lapse[i+1]);
+        
+        if( tempb[i+1] < (adiabatic_temp + stability_tolerance) ) //for numerical stability
         {
         //printf("%s %d\t%s %d\t%f %s %f\n","Layer",i+1,"isconv",isconv[i],tempb[i+1],"<",( tempb[i] * pow(P[i+1]/P[i],lapse[i+1])));
             isconv[i+1] = 1;
@@ -428,8 +703,18 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
         pot_temp[i] = potT[ncreg[i]];
         if(isconv[i]) 
         {
-            tempb[i] = potT[ncreg[i]] * ppk[i];
-            if (isconv[i-1]==0) tempb[i-1] = potT[ncreg[i]];
+            double new_temp = potT[ncreg[i]] * ppk[i];
+            
+            // STABILITY FIX: Add temperature damping to prevent oscillations at cloud decks
+            // Blend old and new temperatures to smooth rapid changes
+            double damping_factor = 0.3;  // Use 30% of new temperature, 70% of old
+            tempb[i] = damping_factor * new_temp + (1.0 - damping_factor) * t_old[i];
+            
+            if (isconv[i-1]==0) {
+                // At convection boundary, also apply damping to avoid discontinuities
+                double new_base_temp = potT[ncreg[i]];
+                tempb[i-1] = damping_factor * new_base_temp + (1.0 - damping_factor) * t_old[i-1];
+            }
         }
     }
 /*    for (i=1; i<zbin; i++) //now layer boundaries
@@ -464,7 +749,6 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
     //         t_old[i],     // Old temperature
     //         tempb[i]      // New temperature
     //     );
-    // }
 
 //atexit(pexit);exit(0); //ms debugging mode
 }//END: void ms_temp_adj()
@@ -472,7 +756,239 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 //*********************************************************
 
 //=========================================================
-//=== Helper Functions ====================================
+//=== Dynamic Condensation Detection Functions ===========
+
+void initialize_condensibles_mode() {
+    // Initialize condensibles based on CONDENSATION_MODE
+    
+    if (CONDENSATION_MODE == 0) {
+        // Manual mode: use predefined lists from AlphaAb.h
+        NCONDENSIBLES = NCONDENSIBLES_MANUAL;
+        
+        // Directly copy values from compound literal macros
+        // This avoids the "array initialized from non-constant array expression" error
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            CONDENSIBLES[i] = CONDENSIBLES_MANUAL[i];
+        }
+        
+        printf("CONDENSATION MODE: Manual - Using predefined %d condensible species\n", NCONDENSIBLES);
+        printf("Manual condensibles: ");
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            printf("%d ", CONDENSIBLES[i]);
+        }
+        printf("\n");
+        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+        
+    } else if (CONDENSATION_MODE == 1) {
+        // Automatic mode: detect condensibles dynamically
+        printf("CONDENSATION MODE: Automatic - Will detect condensibles dynamically\n");
+        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+        NCONDENSIBLES = 0; // Will be set by detect_condensibles_atmosphere()
+        
+    } else if (CONDENSATION_MODE == 2) {
+        // Hybrid mode: start with manual list, validate and expand automatically
+        NCONDENSIBLES = NCONDENSIBLES_MANUAL;
+        
+        // Directly copy values from compound literal macros
+        // This avoids the "array initialized from non-constant array expression" error
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            CONDENSIBLES[i] = CONDENSIBLES_MANUAL[i];
+        }
+        
+        printf("CONDENSATION MODE: Hybrid - Starting with manual list, will validate and expand\n");
+        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+    }
+}
+
+int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure) {
+    // Check if a species should be considered condensible
+    double psat = 0.0;
+    
+    // Get saturation pressure for the species
+    switch(species_id) {
+        case 7:  // H2O
+            psat = ms_psat_h2o(temp);
+            break;
+        case 9:  // NH3
+            psat = ms_psat_nh3(temp);
+            break;
+        case 20: // CO
+            psat = ms_psat_co(temp);
+            break;
+        case 21: // CH4
+            psat = ms_psat_ch4(temp);
+            break;
+        case 52: // CO2
+            psat = ms_psat_co2(temp);
+            break;
+        case 53: // H2
+            psat = ms_psat_h2(temp);
+            break;
+        case 54: // O2
+            psat = ms_psat_o2(temp);
+            break;
+        case 55: // N2
+            psat = ms_psat_n2(temp);
+            break;
+        case 45: // H2S
+            psat = ms_psat_h2s(temp);
+            break;
+        default:
+            return 0; // Unknown species, treat as dry
+    }
+    
+    // Check if saturation pressure is reasonable (not the 1e+20 "above critical" case)
+    if (psat >= 1e+15) {
+        return 0; // Above critical point or undefined - definitely dry
+    }
+    
+    // Calculate saturation ratio
+    if (psat <= 0.0) {
+        return 0; // Invalid saturation pressure
+    }
+    
+    double saturation_ratio = partial_pressure / psat;
+    
+    // If we're within SATURATION_THRESHOLD of saturation, treat as condensible
+    if (saturation_ratio > SATURATION_THRESHOLD) {
+        return 1; // Condensible (Xv)
+    }
+    
+    return 0; // Dry (Xd)
+}
+
+void update_condensibles_list(int layer) {
+    // Update condensibles list for a specific layer (for layer-specific detection)
+    // This function can be called during each convective adjustment if needed
+    
+    if (CONDENSATION_MODE == 0) {
+        return; // Manual mode - no updates needed
+    }
+    
+    // For automatic or hybrid modes, check all species in this layer
+    int temp_condensibles[MAX_CONDENSIBLES];
+    int temp_ncondensibles = 0;
+    
+    // Check all species that have saturation pressure functions
+    int species_to_check[] = {7, 9, 20, 21, 52, 53, 54, 55, 45}; // H2O, NH3, CO, CH4, CO2, H2, O2, N2, H2S
+    int num_species_to_check = 9;
+    
+    for (int i = 0; i < num_species_to_check; i++) {
+        int species_id = species_to_check[i];
+        
+        // Calculate partial pressure for this species
+        double partial_pressure = (xx[layer][species_id] / MM[layer]) * pl[layer];
+        
+        if (check_species_condensible(species_id, tl[layer], pl[layer], partial_pressure)) {
+            // Check if species is already in the list
+            int already_in_list = 0;
+            for (int j = 0; j < temp_ncondensibles; j++) {
+                if (temp_condensibles[j] == species_id) {
+                    already_in_list = 1;
+                    break;
+                }
+            }
+            
+            if (!already_in_list && temp_ncondensibles < MAX_CONDENSIBLES) {
+                temp_condensibles[temp_ncondensibles] = species_id;
+                temp_ncondensibles++;
+            }
+        }
+    }
+    
+    // For layer-specific updates, you could store this information
+    // For now, we'll use the global detection approach
+}
+
+void detect_condensibles_atmosphere() {
+    // Detect condensibles across the entire atmosphere
+    
+    if (CONDENSATION_MODE == 0) {
+        return; // Manual mode - no detection needed
+    }
+    
+    printf("DETECTING CONDENSIBLE SPECIES ACROSS ATMOSPHERE...\n");
+    
+    int detected_condensibles[MAX_CONDENSIBLES];
+    int detected_count = 0;
+    
+    // Species that have saturation pressure functions
+    int species_to_check[] = {7, 9, 20, 21, 52, 53, 54, 55, 45}; // H2O, NH3, CO, CH4, CO2, H2, O2, N2, H2S
+    int num_species_to_check = 9;
+    
+    for (int i = 0; i < num_species_to_check; i++) {
+        int species_id = species_to_check[i];
+        int is_condensible_anywhere = 0;
+        
+        // Check across all atmospheric layers
+        for (int layer = 1; layer <= zbin; layer++) {
+            double partial_pressure = (xx[layer][species_id] / MM[layer]) * pl[layer];
+            
+            if (check_species_condensible(species_id, tl[layer], pl[layer], partial_pressure)) {
+                is_condensible_anywhere = 1;
+                break; // Found at least one layer where it's condensible
+            }
+        }
+        
+        if (is_condensible_anywhere && detected_count < MAX_CONDENSIBLES) {
+            detected_condensibles[detected_count] = species_id;
+            detected_count++;
+            printf("  Species %d detected as condensible\n", species_id);
+        }
+    }
+    
+    if (CONDENSATION_MODE == 1) {
+        // Pure automatic mode: use only detected species
+        NCONDENSIBLES = detected_count;
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            CONDENSIBLES[i] = detected_condensibles[i];
+        }
+        
+    } else if (CONDENSATION_MODE == 2) {
+        // Hybrid mode: merge manual list with detected species
+        int original_count = NCONDENSIBLES;
+        
+        // Add any newly detected species not in the manual list
+        for (int i = 0; i < detected_count; i++) {
+            int species_id = detected_condensibles[i];
+            int already_in_manual = 0;
+            
+            for (int j = 0; j < original_count; j++) {
+                if (CONDENSIBLES[j] == species_id) {
+                    already_in_manual = 1;
+                    break;
+                }
+            }
+            
+            if (!already_in_manual && NCONDENSIBLES < MAX_CONDENSIBLES) {
+                CONDENSIBLES[NCONDENSIBLES] = species_id;
+                NCONDENSIBLES++;
+                printf("  Added species %d to manual list (detected automatically)\n", species_id);
+            }
+        }
+    }
+    
+    printf("FINAL CONDENSIBLES LIST: %d species\n", NCONDENSIBLES);
+    printf("Species IDs: ");
+    for (int i = 0; i < NCONDENSIBLES; i++) {
+        printf("%d ", CONDENSIBLES[i]);
+    }
+    printf("\n");
+    printf("Using single alpha value: %.3f (%.1f%% retention) for all species\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+}
+
+void report_condensibles_changes(int iteration) {
+    // Report changes in condensibles list
+    printf("Condensibles changes after iteration %d:\n", iteration);
+    printf("Species IDs: ");
+    for (int i = 0; i < NCONDENSIBLES; i++) {
+        printf("%d ", CONDENSIBLES[i]);
+    }
+    printf("\n");
+    printf("Using single alpha value: %.3f (%.1f%% retention) for all species\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+}
+
+//=========================================================
 
 double ms_psat_h2o(double temp) //calculate saturation pressure of water
 {
@@ -671,6 +1187,37 @@ double ms_psat_n2(double temp) //calculate saturation pressure of nitrogen
 }
 //*********************************************************
 //*********************************************************
+double ms_psat_h2s(double temp) //calculate saturation pressure of hydrogen sulfide
+{
+    double P;
+    
+    if (temp < 187.7) // below triple point (187.7 K)
+    {
+        // solid H2S
+        // NIST Antoine equation for solid H2S (138.8-212.8 K)
+        // log10(P_bar) = A - B/(T + C)
+        // A = 4.43681, B = 829.439, C = -25.412
+        double log10_P_bar = 4.43681 - 829.439/(temp - 25.412);
+        P = pow(10.0, log10_P_bar) * 1.0e+5; // Convert bar to Pa
+    }
+    else if (temp < 373.1) // between triple point and critical point (373.1 K)
+    {
+        // liquid H2S
+        // NIST Antoine equation for liquid H2S (212.8-349.5 K)
+        // log10(P_bar) = A - B/(T + C)
+        // A = 4.52887, B = 958.587, C = -0.539
+        double log10_P_bar = 4.52887 - 958.587/(temp - 0.539);
+        P = pow(10.0, log10_P_bar) * 1.0e+5; // Convert bar to Pa
+    }
+    else
+    {
+        // above critical point - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+//*********************************************************
+//*********************************************************
 double ms_latent(int mol, double temp)
 {
     double l;
@@ -736,6 +1283,14 @@ double ms_latent(int mol, double temp)
         lfuse=2.573e+04; lsubl=2.437e+05;
         molweight = 28.01;
     } 
+//H2S --- NIST Chemistry Webbook SRD 69
+    if(mol==45) {t_crit= 373.3; t_triple=187.7; 
+        lvap_bp=18.6e+03 * 1.0e+3 / 34.081; // NIST 18.6 kJ/mol at 243K -> J/kg
+        lvap_tp=21.9e+03 * 1.0e+3 / 34.081; // NIST 21.9 kJ/mol at 200K -> J/kg
+        lfuse=(25.4e+03 - 21.9e+03) * 1.0e+3 / 34.081; // lfuse = lsubl - lvap_tp
+        lsubl=25.4e+03 * 1.0e+3 / 34.081; // NIST 25.4 kJ/mol at 175K -> J/kg
+        molweight = 34.081;
+    } 
 
 //Now calculate the appropriate l:
     if (temp<=t_triple) {l = lsubl;}
@@ -750,5 +1305,6 @@ double ms_latent(int mol, double temp)
 //*********************************************************
 
 //atexit(pexit);exit(0); //ms debugging mode
-//printf("%s\n", "HERE"); //template
+
+
 
