@@ -386,6 +386,9 @@ double H2SHeat(double T)
     double t, A, B, C, D, E, cp;
     double T1;
     // NIST-JANAF data for H2S gas phase heat capacity
+    // Source: https://webbook.nist.gov/cgi/cbook.cgi?ID=C7783064&Mask=1&Type=JANAFG&Table=on
+    // Reference: Chase, M.W., Jr., NIST-JANAF Thermochemical Tables, Fourth Edition, 
+    //            J. Phys. Chem. Ref. Data, Monograph 9, 1998, 1-1951
     double cp100=33.78, cp200=34.23, cp298=34.23;
     
     if (T < 100.0) {
@@ -402,20 +405,23 @@ double H2SHeat(double T)
         }
     
         t=T1/1000.0;
-        // NIST Shomate equation parameters for H2S (298-1800K)
-        if (T1<1800.0) {
+        // NIST Shomate equation parameters for H2S 
+        // Official NIST coefficients from Chase, 1998
+        if (T1<1400.0) {
+            // Temperature range: 298-1400K
             A=26.88412;
             B=18.67809;
             C=3.434203;
             D=-3.378702;
             E=0.135882;
         } else {
-            // Extrapolation for very high temperatures
-            A=44.70000;
-            B=3.50000;
-            C=-0.96000;
-            D=0.08100;
-            E=-6.50000;
+            // Temperature range: 1400-6000K  
+            // CORRECTED: Using official NIST high-temperature coefficients
+            A=51.22136;
+            B=4.147486;
+            C=-0.643566;
+            D=0.041621;
+            E=-10.46385;
         }
         cp = A + B*t +  C*t*t + D*t*t*t + E/t/t;
     }

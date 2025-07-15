@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fwl-janus"
+version = "24.11.05"
+description = "Temperature structure generator for planetory atmospheres."
+readme = "README.md"
+authors = [
+    {name = "Tim Lichtenberg", email = "tim.lichtenberg@rug.nl"},
+    {name = "Mark Hammond", email = "mark.hammond@physics.ox.ac.uk"},
+    {name = "Ryan Boukrouche", email = "ryan.boukrouche@astro.su.se"},
+    {name = "RJ Graham", email = "arejaygraham@uchicago.edu"},
+    {name = "Harrison Nicholls", email = "harrison.nicholls@physics.ox.ac.uk"},
+    {name = "Hamish Innes", email = "hamish.innes@physics.ox.ac.uk"},
+    {name = "Laurent Soucasse", email = "l.soucasse@esciencecenter.nl"},
+]
+license = {text = "Apache 2.0 License"}
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["exoplanet", "atmosphere"]
+requires-python = '>=3.10'
+dependencies = [
+  'click',
+  'matplotlib',
+  'natsort',
+  'netcdf4',
+  'numpy',
+  'osfclient',
+  'pandas',
+  'platformdirs',
+  'requests',
+  'scipy',
+  'seaborn',
+  'toml',
+  'tomlkit',
+  'f90nml',
+]
+
+[project.urls]
+homepage = "https://github.com/FormingWorlds/JANUS"
+
+[project.optional-dependencies]
+develop = [
+  "bump-my-version",
+  "coverage[toml]",
+  'fwl-mors',
+  "pytest"
+]
+docs = [
+    "markdown-include",
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
+publishing = [
+  "twine",
+  "wheel",
+  "build"
+]
+
+[project.scripts]
+janus = "janus.cli:cli"
+
+[tool.setuptools]
+package-dir = {"janus" = "src/janus"}
+include-package-data = true
+
+[tool.coverage.run]
+branch = true
+source = ["janus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.bumpversion]
+# https://callowayproject.github.io/bump-my-version/howtos/calver/
+current_version = "24.11.05"
+parse = """(?x)                     # Verbose mode
+    (?P<release>                    # The release part
+        (?:[1-9][0-9])\\.           # YY.
+        (?:[0-1][0-9])\\.           # MM.
+        (?:[0-3][1-9])              # DD
+    )
+    (?:\\.(?P<patch>\\d+))?         # .patch, optional
+"""
+serialize = ["{release}.{patch}", "{release}"]
+
+[tool.bumpversion.parts.release]
+calver_format = "{YY}.{0M}.{0D}"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""

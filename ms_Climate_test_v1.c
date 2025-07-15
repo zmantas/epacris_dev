@@ -407,25 +407,24 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
 
         //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        //ms22: convective adjustment iteration:
+        // CONVECTION!!!!!!!!!!
+        //ms22: Convective adjustment iteration:
         //needed to avoid temperature jumps at upper/lower tails of convective regions 
         //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         deltaconv = zbin; //start with all layers convective
         while (deltaconv > 0) // continue until no convective layers are found
         {
-
             for (j=1; j<=zbin; j++) {
                 pot_temp[j] = 0.0; //reset potential temperature
                 ncreg[j] = 0; //reset convective region
             } 
 
-
-
             for (j=1; j<=zbin; j++) 
             {
                 ms_adiabat(j,lapse,heliumnumber[j],&cp[j],saturation_ratios[j]); //calculate condensation equilibrium, lapse rate and heat capacity
                 
+                // Ad hoc cold trap, need consistent calculation of cold traps
                 // //need to propagate cold traps upwards
                 // if (j<zbin) {
                 //     for (jabove=j+1; jabove<=zbin; jabove++) {
@@ -454,29 +453,21 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 }
             }
 
+            // INTEGRATE CLOUD PHYSICS INTO REGULAR CONVECTION
+            // Apply enhanced cloud physics and equilibrium distribution after each equilibrium calculation
+            // This ensures cloud structure reflects proper sedimentation-mixing balance
+            for (j=1; j<=zbin; j++) {
+                apply_enhanced_cloud_physics(j, GA); // Calculate particle properties and microphysics
+            }
+            apply_equilibrium_cloud_distribution(GA); // Apply A&M 2001 exponential redistribution using real particle sizes from particlesizef_local
+            
             /* new RC boundary */
             ncl = 0;
             nrl = 0;
             /* determine convection, and record convective layers */
 
-            // if(CONVEC_ADJUST==0)
-            // {
-            //     for (j=zbin; j>=1; j--) {  // Loop from top of atmosphere down
-            //         // Check if temperature gradient exceeds adiabatic lapse rate
-            //         if ( i!=1 && (tempb[j-1] >= (tempb[j] * pow(P[j-1]/P[j],lapse[j]) * 0.98)) ) {
-            //         //if ( tempb[j-1] >= (tempb[j] * pow(P[j-1]/P[j],lapse[j]) * 0.95) ) {
-            //             // If layer is too warm compared to layer above (unstable)
-            //             tempb[j-1] = tempb[j] * pow(P[j-1]/P[j],lapse[j]); // Adjust temperature to adiabatic profile
-            //             isconv[j] = 1;  // Mark layer as convective
-            //             ncl = ncl+1;    // Count convective layers
-            //         } else {
-            //             isconv[j] = 0;  // Mark layer as radiative
-            //             nrl = nrl+1;    // Count radiative layers
-            //         }
-            //     }
-            // } //END: CONVEC_ADJUST=0
 
-            if(CONVEC_ADJUST==1) ms_conv_check(tempb, P, lapse, isconv, &ncl, &nrl); //ms22: check convective layers
+            ms_conv_check(tempb, P, lapse, isconv, &ncl, &nrl); //ms22: check convective layers
 
 //          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
 
@@ -500,13 +491,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             }
 */        
    
-            // if(CONVEC_ADJUST==0)
-            // {
-            //     printf("%s\t%s\t\t%s\t\t%s\t%s\t%s\n","Layer","cp","lapse","isconv","T_old","T_new");
-            //     for (j=zbin; j>=0; j--) {printf("%d\t%f\t%f\t%d\t%f\t%f\n",j,cp[j],lapse[j],isconv[j], t_old[j], tempb[j]);}
-            // }
 
-            if(CONVEC_ADJUST==1 && ncl>=0) ms_temp_adj(tempb, P, lapse, isconv, cp, ncreg, pot_temp); //ms22: assign convective regimes, adjust temperatures
+            if(ncl>=0) ms_temp_adj(tempb, P, lapse, isconv, cp, ncreg, pot_temp); //ms22: assign convective regimes, adjust temperatures
 
             // // Track cloud mass changes for diagnostic purposes - we're at the end of a convective adjustment step
             // static double prev_total_cloud = -1.0; // Track between iterations, -1 indicates first run
@@ -586,10 +572,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
             
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        } //ms22: END of convective adjustment iteration
+        } // END of convective adjustment iteration
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         
-        // APPLY RAINOUT BASED ON EVENT MODE
+        // APPLY RAINOUT BASED ON EVENT MODE (This is using Grahams alpha method, alhpa = 1 == keep all condensates)
         int apply_rainout = 0;  // Flag to determine if rainout should be applied
         
         if (RAINOUT_MODE == 0) {
@@ -606,72 +592,98 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         
         if (apply_rainout) {
             rainout_events_completed++;
-            printf("\n=== APPLYING RAINOUT EVENT %d ===\n", rainout_events_completed);
-            printf("RC iteration %d: Rainout triggered (mode = %d)\n", i, RAINOUT_MODE);
-            
-            for (j=1; j<=zbin; j++) {
-                double layer_mass_loss = 1.0;  // Track mass loss for this layer
-                ms_rainout(j, &layer_mass_loss); // Apply rainout physics
+            printf("\n");
+            printf("*********************************************************\n");
+            printf("*** CONVECTIVE STEP %d: CLOUD FORMATION EVENT %d ***\n", total_step_count, rainout_events_completed);
+            printf("*********************************************************\n");
+            printf("Climate iteration %d, Convective step %d: Applying realistic cloud physics\n", i, total_step_count);
+            printf("Cloud physics triggered (mode = %d, event %d)\n", RAINOUT_MODE, rainout_events_completed);
+            printf("\n");
+
+            // for (j=1; j<=zbin; j++) {
+            //     double layer_mass_loss = 1.0;  // Track mass loss for this layer
+            //     ms_rainout(j, &layer_mass_loss); // Apply rainout physics
                 
-                // Store mass loss for pressure adjustment
-                cumulative_mass_loss[j] *= layer_mass_loss;
+            //     // Store mass loss for pressure adjustment
+            //     cumulative_mass_loss[j] *= layer_mass_loss;
+            // }        
+            // SKIP GRAHAM ALPHA: Go directly from equilibrium to realistic sedimentation
+            // Graham+2021 has already set equilibrium cloud amounts in ms_adiabat()
+            // Now we apply realistic microphysics without ad hoc removal
+            
+            // CLOUD PHYSICS NOW INTEGRATED INTO REGULAR CONVECTION LOOP
+            // The following code is commented out because cloud physics is now applied 
+            // continuously in the convection loop rather than only during special events
+            /*
+            printf("=== CALCULATING ENHANCED CLOUD PHYSICS ===\n");
+            for (j=1; j<=zbin; j++) {
+                apply_enhanced_cloud_physics(j, GA); // Calculate particle properties on full equilibrium amounts
             }
-            printf("=== RAINOUT EVENT %d COMPLETE ===\n\n", rainout_events_completed);
+            printf("=== ENHANCED CLOUD PHYSICS COMPLETE ===\n");
+            
+            printf("=== APPLYING ACKERMAN & MARLEY (2001) CLOUD REDISTRIBUTION ===\n");
+            apply_equilibrium_cloud_distribution(GA);
+            printf("=== ACKERMAN & MARLEY (2001) REDISTRIBUTION COMPLETE ===\n");
+            */
+            
         } else {
             if (RAINOUT_MODE > 0) {
                 printf("RC iteration %d: No rainout (events completed: %d/%d)\n", 
                        i, rainout_events_completed, MAX_RAINOUT_EVENTS);
             }
         }
-        
-        /* PRESSURE ADJUSTMENT for realistic rainout approach */
-        if (PRESSURE_CONSERVATION == 1) {
-            // Calculate total mass loss across all layers during this convective step
-            double total_mass_loss = 0.0;
-            int layers_with_loss = 0;
-            double max_mass_loss = 0.0;
+        // /* PRESSURE ADJUSTMENT for realistic rainout approach */
+        // if (PRESSURE_CONSERVATION == 1) {
+        //     // Calculate total mass loss across all layers during this convective step
+        //     double total_mass_loss = 0.0;
+        //     int layers_with_loss = 0;
+        //     double max_mass_loss = 0.0;
             
-            for (j=1; j<=zbin; j++) {
-                double layer_loss = 1.0 - cumulative_mass_loss[j];
-                if (layer_loss > 1.0e-6) {
-                    total_mass_loss += layer_loss;
-                    layers_with_loss++;
-                    max_mass_loss = fmax(max_mass_loss, layer_loss);
-                }
-            }
+        //     for (j=1; j<=zbin; j++) {
+        //         double layer_loss = 1.0 - cumulative_mass_loss[j];
+        //         if (layer_loss > 1.0e-6) {
+        //             total_mass_loss += layer_loss;
+        //             layers_with_loss++;
+        //             max_mass_loss = fmax(max_mass_loss, layer_loss);
+        //         }
+        //     }
             
-            // Apply pressure adjustments while maintaining hydrostatic equilibrium
-            if (layers_with_loss > 0 && total_mass_loss > 1.0e-6) {
-                printf("PRESSURE ADJUSTMENT: %d layers with mass loss, total loss = %.6f, max loss = %.6f\n", 
-                       layers_with_loss, total_mass_loss, max_mass_loss);
+        //     // Apply pressure adjustments while maintaining hydrostatic equilibrium
+        //     if (layers_with_loss > 0 && total_mass_loss > 1.0e-6) {
+        //         printf("PRESSURE ADJUSTMENT: %d layers with mass loss, total loss = %.6f, max loss = %.6f\n", 
+        //                layers_with_loss, total_mass_loss, max_mass_loss);
                 
-                // Adjust pressure profile from top down to maintain hydrostatic equilibrium
-                for (j=zbin; j>=1; j--) {
-                    // Apply cumulative mass loss to pressure
-                    P[j] *= cumulative_mass_loss[j];
+        //         // Adjust pressure profile from top down to maintain hydrostatic equilibrium
+        //         for (j=zbin; j>=1; j--) {
+        //             // Apply cumulative mass loss to pressure
+        //             P[j] *= cumulative_mass_loss[j];
                     
-                    // Recalculate hydrostatic equilibrium
-                    if (j > 1) {
-                        // Update pressure at lower boundary based on updated mass and temperature
-                        tempc[j] = (tempb[j]+tempb[j-1])/2.0;
-                        scaleheight = KBOLTZMANN * tempc[j] / meanmolecular[j] / AMU / GA / 1000;
+        //             // Recalculate hydrostatic equilibrium
+        //             if (j > 1) {
+        //                 // Update pressure at lower boundary based on updated mass and temperature
+        //                 tempc[j] = (tempb[j]+tempb[j-1])/2.0;
+        //                 scaleheight = KBOLTZMANN * tempc[j] / meanmolecular[j] / AMU / GA / 1000;
                         
-                        // Maintain hydrostatic consistency
-                        double dz = znew[j] - znew[j-1];
-                        P[j-1] = P[j] * exp(dz / scaleheight);
-                    }
-                }
+        //                 // Maintain hydrostatic consistency
+        //                 double dz = znew[j] - znew[j-1];
+        //                 P[j-1] = P[j] * exp(dz / scaleheight);
+        //             }
+        //         }
                 
-                // Update boundary conditions
-                pl[0] = P[0];  // Surface pressure
-                for (j=1; j<=zbin; j++) {
-                    pl[j] = 0.5 * (P[j] + P[j-1]);  // Mid-layer pressures
-                }
+        //         // Update boundary conditions
+        //         pl[0] = P[0];  // Surface pressure
+        //         for (j=1; j<=zbin; j++) {
+        //             pl[j] = 0.5 * (P[j] + P[j-1]);  // Mid-layer pressures
+        //         }
                 
-                printf("PRESSURE UPDATE: Surface pressure: %.3e Pa (change: %.3f%%)\n", 
-                       P[0], 100.0*(P[0]/P_original[0] - 1.0));
-            }
-        }
+        //         printf("PRESSURE UPDATE: Surface pressure: %.3e Pa (change: %.3f%%)\n", 
+        //                P[0], 100.0*(P[0]/P_original[0] - 1.0));
+        //     }
+        // }        
+        /* NO PRESSURE ADJUSTMENT NEEDED for realistic sedimentation approach */
+        // Realistic sedimentation conserves mass by redistributing material between layers
+        // Only material falling out of the bottom layer (surface) leaves the atmosphere
+        // This should be a small effect compared to Graham's alpha removal approach
         
         /* hydrostatic equilibrium */
         // printf("=== Computing hydrostatic equilibrium ===\n");

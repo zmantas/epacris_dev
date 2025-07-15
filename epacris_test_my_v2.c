@@ -21,12 +21,22 @@ char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
 
 //Input files
 //#include "Input/conv_test/55cnce_conv_test.h"
-#include "Input/conv_test/AlphaAb.h"
+#include "Input/conv_test/K2-18b.h"
 // Opacity species list
 const char* species[] = {
     
-    "SO2", "H2O","NH3", "N2", "CO2", "CO", "CH4","H2S","NO2", "NO", "O2", "OH"
-    // ,"OCS", "O3", "C2H6", "CH2O2", "HO2", "HCN", "HNO3", "N2O","C2H2", "C2H4", "H2CO","H2O2"
+    "SO2", "H2O", "NH3", "N2", "CO2", "CO", "CH4"
+    //, "H2S", "NO2", "NO", "O2", "OH","HO2", "HCN", "OCS", 
+    // "O3", 
+    // "C2H6", 
+    // "CH2O2", 
+
+    // "HNO3", 
+    // "N2O",
+    // "C2H2", 
+    // "C2H4", 
+    // "H2CO",
+    // "H2O2"
 };
 
 // Define NUM_SPECIES for external files
@@ -45,8 +55,8 @@ const char* species[] = {
 char CROSSHEADING_STR[1024] = CROSSHEADING;
 
 double TAUdoub[2*zbin+1], Tdoub[2*zbin+1], Pdoub[2*zbin+1], MMdoub[2*zbin+1], zdoub[2*zbin+1]; //double grid for non-isothermal layers: all bottom-up!!
-double meanmolecular[zbin+1];
-double zl[zbin+1];
+double meanmolecular[zbin+1]; //mean molecular mass
+double zl[zbin+1]; //log(P)
 double pl[zbin+1];
 double tl[zbin+1];
 double MM[zbin+1];
@@ -81,6 +91,11 @@ int    numr=0, numm=0, numt=0, nump=0, numx=0, numc=0, numf=0, numa=0, waternum=
 double xx[zbin+1][NSP+1];
 double clouds[zbin+1][NSP+1] = {0.0}; //ms22: moist adiabat & clouds update
 double mkv[zbin+1], Tnew[zbin+1], Pnew[zbin+1];
+
+// Enhanced cloud physics arrays (defined here, declared as extern in cloud_physics_simple.h)
+double particle_radius_um[zbin+1][MAX_CONDENSIBLES];
+double fall_velocity_ms[zbin+1][MAX_CONDENSIBLES];
+double cloud_retention[zbin+1][MAX_CONDENSIBLES];
 
 double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
 double MeanH2H2CIA[zbin+1], MeanH2HeCIA[zbin+1], MeanH2HCIA[zbin+1], MeanN2H2CIA[zbin+1], MeanN2N2CIA[zbin+1],MeanCO2CO2CIA[zbin+1];
@@ -135,6 +150,8 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 {
 //========================================================
 //========================================================
+
+
     //double time,t_passed,t2_passed;
     //struct timespec tstart,tend;
     //clock_gettime(CLOCK_REALTIME, &tstart);
@@ -176,8 +193,6 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
         printf("\n");
     }
     if (TWO_STR_SOLVER == 0) printf("%s\n","Using Toon+89 Delta-2-STREAM Solver (by R.Hu)");
-    if (CONVEC_ADJUST == 1) printf("%s\n","Convective Adjustment: Conserving Enthalpy (using potential temperature) (by M.Scheucher)");
-    if (CONVEC_ADJUST == 0) printf("%s\n","Convective Adjustment: Dry with simple R/cp (by R.Hu)");
     printf("%s\n\n",fillmi);
 //end edits
 //atexit(pexit);exit(0); //ms debugging mode

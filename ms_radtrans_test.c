@@ -252,10 +252,10 @@ printf("%s\t%f\n","cos(THETAREF) = ",cos(THETAREF));
             ws[j] += crossr[i]*MM[j1];
             
             // --- Aerosol cross sections ---
-            /* wa[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*(1.0-sinab[1][i]);
-            wa[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*(1.0-sinab[2][i]);
-            ws[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i];
-            ws[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]; */
+            //wa[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*(1.0-sinab[1][i]);
+            //wa[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*(1.0-sinab[2][i]);
+            //ws[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i];
+            //ws[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]; */
            
             // --- Cloud opacities and albedos ---     
             /* wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i])/MM[j1];
@@ -363,6 +363,9 @@ for (i=0; i<(NLAMBDA-1); i++) {
     // TOA incoming flux: solar spectrum with zenith angle correction
     radiationI0 += solar_flux_avg * dlambda * cos_zenith;
 }
+
+// Energy balance: F_out = F_absorbed_stellar + F_internal
+// Stellar absorption controlled by FaintSun parameter in main code
 
 radiationO = NetFlux[0][0]; /* TOA net outgoing flux */
     /* Obtain the Flux and the Flux Jacobian, from bottom to up */
@@ -618,6 +621,20 @@ if (TS_SCHEME == 1){
     /*printf("%s\t%f\n", "Top-of-Atmosphere incoming radiation flux is", radiationI0);
     printf("%s\t%f\n", "Bottom-of-Atmospehre incoming radiation flux is", radiationI1);*/
     if (iter % PRINT_ITER == 0) printf("%s\t%f\n", "TOA outgoing net radiation flux is", radiationO);
+    
+    // Energy balance diagnostics
+    if (iter % PRINT_ITER == 0 && TWO_STR_SOLVER >= 1) {
+        double absorbed_stellar = radiationI0;  // Already scaled by FaintSun in main code
+        double internal_flux = SIGMA * pow(Tint, 4.0);
+        double energy_balance = radiationO - absorbed_stellar - internal_flux;
+        
+        printf("Energy Balance Check:\n");
+        printf("  Absorbed stellar:     %.2e W/m2\n", absorbed_stellar);
+        printf("  Internal heat:        %.2e W/m2\n", internal_flux);
+        printf("  TOA outgoing:         %.2e W/m2\n", radiationO);
+        printf("  Energy imbalance:     %.2e W/m2\n", energy_balance);
+        printf("  Relative error:       %.2e\n", energy_balance / (absorbed_stellar + internal_flux));
+    }
     
     // Return radiation flux values for diagnostics
     *radiationI0_out = radiationI0;

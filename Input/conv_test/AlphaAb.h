@@ -55,7 +55,7 @@ Note: The parameters in this file can be modified to model different planets aro
 			4: Import from results of previous calculations in the standard form (TP import only for rad) 
                         */
 
-#define ELE_ABUN        "Input/elemental_abundance_files/solar.dat"
+#define ELE_ABUN        "Input/elemental_abundance_files/magma_ocean_example.dat"
 
 /* Iteration Conditions */
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations */
@@ -130,8 +130,8 @@ Note: The parameters in this file can be modified to model different planets aro
 // For automatic mode - these will be set dynamically
 #define MAX_CONDENSIBLES 20  // Maximum number of species that could potentially condense
 
-#define NCONDENSIBLES_MANUAL 2  //how many potentially condensing species for manual mode
-#define CONDENSIBLES_MANUAL (int[]){7,9} //H2O=7; NH3=9; CO=20; CH4=21; CO2=52; H2=53; O2=54; N2=55
+#define NCONDENSIBLES_MANUAL 0  //how many potentially condensing species for manual mode
+#define CONDENSIBLES_MANUAL (int[]){} //H2O=7; NH3=9; CO=20; CH4=21; CO2=52; H2=53; O2=54; N2=55
 
 
 
@@ -141,11 +141,16 @@ Note: The parameters in this file can be modified to model different planets aro
 
 #define PRESSURE_CONSERVATION 0  // 1 = Realistic (pressure adjusts)
                                 // 0 = Open system (readjust mole fractions, constant pressure)
-#define ALPHA_RAINOUT 0.1        // Single alpha value for ALL condensible species (fraction retained after rainout)
+#define ALPHA_RAINOUT 1.0        // Single alpha value for ALL condensible species (fraction retained after rainout)
+
+//- ENHANCED CLOUD PHYSICS -----------------------
+// Enhanced cloud physics options (optional - keeps Graham+2021 intact)
+#define CLOUD_PHYSICS_MODE 0        // 0=Graham+2021 only, 1=Ackerman-Marley, 2=Hybrid
+#define EDDY_DIFFUSION_COEFF 1.0e6  // m²/s (typical for exoplanets)
 
 #define RAINOUT_MODE 1           // 0 = continuous (every iteration), 1 = single event, 2 = multiple events
 #define RAINOUT_TRIGGER_ITERATION 3  // RC iteration to trigger rainout event
-#define MAX_RAINOUT_EVENTS 1     // Maximum number of rainout events allowed
+#define MAX_RAINOUT_EVENTS 0     // Maximum number of rainout events allowed
 
 /* Reaction List */
 #define REACTION_LIST "Condition/ReactionList/zone_general_CHO.dat"

@@ -160,6 +160,93 @@ if pot_temp_index is not None:
     pot_temp_plot[pot_temp_plot < 1.0] = np.nan  # Set very small values to NaN for cleaner plotting
     ax1.plot(pot_temp_plot, pressure, 'g--', linewidth=2, alpha=0.8, label='Potential Temperature')
 
+# Add H2O condensation curve for comparison
+def h2o_saturation_pressure(temp):
+    """Calculate H2O saturation pressure in Pa using same formulation as EPACRIS"""
+    if temp < 273.16:
+        # Over ice (Murphy & Koop 2005)
+        psat = np.exp(9.550426 - 5723.265/temp + 3.53068*np.log(temp) - 0.00728332*temp)
+    else:
+        # Over water (Seinfeld & Pandis 2006)
+        a = 1 - 373.15/temp
+        psat = 101325 * np.exp(13.3185*a - 1.97*a*a - 0.6445*a*a*a - 0.1229*a*a*a*a)
+    return psat
+
+# Find H2O data in the gas species (species 7 is H2O)
+h2o_vmr_data = None
+h2o_gas_index = None
+for i, species_num in enumerate(gas_species_numbers):
+    if species_num == 7:  # H2O is species 7
+        h2o_vmr_data = gas_data[:, i]
+        h2o_gas_index = i
+        break
+
+# Calculate H2O condensation curve using ACTUAL H2O abundances from simulation
+if h2o_vmr_data is not None:
+    condensation_temps = []
+    valid_pressures = []
+    
+    for p_bar, vmr in zip(pressure, h2o_vmr_data):
+        if vmr > 1e-15:  # Only calculate for layers with significant H2O
+            p_total = p_bar * 1e5  # Convert bar to Pa
+            p_partial = vmr * p_total  # Actual H2O partial pressure at this layer
+            
+            # Simple approach: solve p_partial = p_sat(T) for T
+            temp_guess = 200.0
+            for _ in range(20):  # Simple iteration
+                p_sat = h2o_saturation_pressure(temp_guess)
+                if abs(p_partial - p_sat) < 1e-3:
+                    break
+                # Simple adjustment
+                if p_partial > p_sat:
+                    temp_guess += 5.0
+                else:
+                    temp_guess -= 5.0
+                temp_guess = max(50.0, min(2000.0, temp_guess))
+            
+            condensation_temps.append(temp_guess)
+            valid_pressures.append(p_bar)
+    
+    # Plot the condensation curve
+    if len(condensation_temps) > 0:
+        ax1.plot(condensation_temps, valid_pressures, 'cyan', linewidth=3, linestyle='-', 
+                 label=f'H₂O Condensation', alpha=0.9,zorder=100)
+    
+else:
+    # Fallback: if H2O data not found, use generic curves
+    print("Warning: H2O data (species 7) not found in gas data. Using generic condensation curves.")
+    
+    # Use the same pressure range as the atmospheric profile
+    pressure_range = np.logspace(np.log10(min(pressure)), np.log10(max(pressure)), 100)
+    
+    # Plot generic curves for typical VMR values
+    for vmr, style, alpha_val in [(0.01, '--', 0.5), (0.1, ':', 0.8), (0.5, '-.', 0.5)]:
+        condensation_temps_generic = []
+        for p_bar in pressure_range:
+            p_total = p_bar * 1e5  # Convert bar to Pa
+            p_partial = vmr * p_total
+            temp_guess = 200.0
+            for iteration in range(50):
+                p_sat = h2o_saturation_pressure(temp_guess)
+                error = p_partial - p_sat
+                if abs(error) < 1e-6:
+                    break
+                if temp_guess > 273.16:
+                    a = 1 - 373.15/temp_guess
+                    dp_dt = p_sat * (13.3185 * 373.15/temp_guess**2 - 2*1.97*a*373.15/temp_guess**2 
+                                   - 3*0.6445*a*a*373.15/temp_guess**2 - 4*0.1229*a*a*a*373.15/temp_guess**2)
+                else:
+                    dp_dt = p_sat * (5723.265/temp_guess**2 + 3.53068/temp_guess - 0.00728332)
+                if abs(dp_dt) > 1e-10:
+                    temp_guess = temp_guess - error / dp_dt
+                else:
+                    temp_guess = temp_guess + 1.0
+                temp_guess = max(50.0, min(2000.0, temp_guess))
+            condensation_temps_generic.append(temp_guess)
+        
+        ax1.plot(condensation_temps_generic, pressure_range, 'cyan', linewidth=2, linestyle=style, 
+                 alpha=alpha_val, label=f'H₂O Condensation (VMR={vmr:.2f})')
+
 # Mark convective layers if data is available
 if isconv_data is not None:
     # Create mask for convective layers
@@ -369,7 +456,7 @@ for i, std_num in enumerate(cloud_species_numbers):
             color=color, 
             linestyle='--',
             marker='o', 
-            markersize=4,
+            markersize=0,
             linewidth=2,
             label=f"{name} (cloud, {avg_vmr:.2e})"
         )
@@ -389,9 +476,10 @@ ax2.grid(True, alpha=0.3)
 # Heat capacity and lapse rate plot with twin axes
 ax3.plot(cp_data, pressure, 'r-', linewidth=3, label='Heat Capacity')
 ax3.set_yscale('log')
+ax3.set_xscale('log')
 ax3.set_ylim(max(pressure), min(pressure))
 # Set reasonable x-limits for heat capacity (typical range for atmospheric gases)
-ax3.set_xlim(0, 100)
+ax3.set_xlim(1e-1, 500)
 ax3.set_xlabel('Heat Capacity (J mol⁻¹ K⁻¹)', fontsize=12, color='red')
 ax3.set_ylabel('Pressure (Bar)', fontsize=12)
 ax3.set_title('Heat Capacity & Lapse Rate', fontsize=14)
@@ -406,7 +494,7 @@ if lapse_index is not None:
     ax3_twin.set_yscale('log')
     ax3_twin.set_ylim(max(pressure), min(pressure))
     # Set reasonable x-limits for lapse rate (typical values 0.1 to 1.0)
-    ax3_twin.set_xlim(0.1, 0.5)
+    ax3_twin.set_xlim(0.0, 0.4)
     ax3_twin.set_xlabel('Lapse Rate (d ln T / d ln P)', fontsize=12, color='blue')
     ax3_twin.tick_params(axis='x', colors='blue')
     
