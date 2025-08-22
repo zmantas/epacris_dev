@@ -116,16 +116,7 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
         double sumBint; // check against sigma*tint^4
         double dFnetC[zbin+1]; //ms23: taking time stepping approach to jacobian solver
     
-    double solarfraction;
-    solarfraction = FADV/cos(THETAREF); //ms2021: global average, I guess
-	
-/*MS: DEBUGGING:
 
-printf("%s\n","\n==== DEBUGGING ===="); //template
-printf("%s\t%f\n","THETAREF = ",THETAREF); 
-printf("%s\t%f\n","cos(THETAREF) = ",cos(THETAREF)); 
-//atexit(pexit);exit(0); //ms debugging mode
-*/
 	/* process temperature for UV cross sections */
 //markus: we only have uv sigmas between 200-300K? (see input file)
 	double temperature[zbin+1], crossl;
@@ -177,9 +168,9 @@ printf("%s\t%f\n","cos(THETAREF) = ",cos(THETAREF));
         }
     
     double radiationI0, radiationI1, radiationO;
-    radiationI0=0;
-    radiationI1=0;
-    radiationO=0;
+    radiationI0=0; //TOA incoming flux [W/m²]
+    radiationI1=0; //BOA incoming flux [W/m²]
+    radiationO=0; //TOA NET flux (upward-downward) [W/m²]
     
 //    FILE *fp, *fopa;
 //    fp=fopen("AuxillaryOut/checkemission.dat","w");
@@ -344,25 +335,26 @@ for (i=0;i<=zbin;i++)
 //========================================================   
 //DEBUGG    printf("%s\n","Wavelength-loop DONE");
 
-// Calculate incoming stellar radiation by integrating solar spectrum
-radiationI0 = 0.0;  // TOA incoming flux
-radiationI1 = 0.0;  // BOA incoming flux
-
-// Apply zenith angle correction: cos(zenith_angle)
-double cos_zenith = cos(THETAREF);
-
-for (i=0; i<(NLAMBDA-1); i++) {
-    // For logarithmic wavelength grid, use proper integration
-    double lambda1 = wavelength[i];
-    double lambda2 = wavelength[i+1];
-    double dlambda = lambda2 - lambda1;  // Wavelength bin width in nm
-    
-    // Use trapezoidal rule for better accuracy
-    double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);  // Average flux in bin
-    
-    // TOA incoming flux: solar spectrum with zenith angle correction
-    radiationI0 += solar_flux_avg * dlambda * cos_zenith;
-}
+#if DIRECT_BEAM_MODE == 1
+    // Direct beam mode: use zenith angle
+    double cos_zenith = cos(THETAREF);
+    for (i=0; i<(NLAMBDA-1); i++) {
+        double lambda1 = wavelength[i];
+        double lambda2 = wavelength[i+1];
+        double dlambda = lambda2 - lambda1;
+        double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);
+        radiationI0 += solar_flux_avg * dlambda * cos_zenith;
+    }
+#else
+    // Diffuse mode: use redistribution factor
+    for (i=0; i<(NLAMBDA-1); i++) {
+        double lambda1 = wavelength[i];
+        double lambda2 = wavelength[i+1];
+        double dlambda = lambda2 - lambda1;
+        double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);
+        radiationI0 += solar_flux_avg * dlambda * FADV;
+    }
+#endif
 
 // Energy balance: F_out = F_absorbed_stellar + F_internal
 // Stellar absorption controlled by FaintSun parameter in main code
@@ -373,12 +365,14 @@ radiationO = NetFlux[0][0]; /* TOA net outgoing flux */
     //Heng eqs.:
     if (TWO_STR_SOLVER >= 1 ) 
     {
+    // Populate Rflux with netflux differences
     for (j=0; j<=nrl; j++) {
         if(j<nrl || isconv1[zbin] == 1) Rflux[j] = NetFlux[j][0] - NetFlux[j+1][0]; //now as delta netflux
         // if(j<nrl || isconv1[zbin] == 1) Rflux[j] = NetFlux[j][0] - SIGMA*pow(Tint,4.0); //now as delta netflux
         if(isnan(Rflux[j])) {printf("%s%d%s %f %s","isNaN Rflux[",j,"] ",Rflux[j]," --- set to 0.0");Rflux[j] = 0.0;}
         if (j<zbin && j>0) dFnetC[j] = Fcup[j]-Fcdn[j]-Fcup[j+1]+Fcdn[j+1]; //dFnet from fluxes at layer centers, direclty influenced by boundary temperatures
     }
+    // Surface heating
     if(isconv1[zbin]== 0) {
         Rflux[nrl] = NetFlux[nrl][0] - SIGMA*pow(Tint,4.0);
         if(isnan(Rflux[nrl])) {printf("%s %f %s","isNaN Rflux[nrl] ",Rflux[nrl]," --- set to 0.0");Rflux[nrl] = 0.0;}
@@ -634,6 +628,7 @@ if (TS_SCHEME == 1){
         printf("  TOA outgoing:         %.2e W/m2\n", radiationO);
         printf("  Energy imbalance:     %.2e W/m2\n", energy_balance);
         printf("  Relative error:       %.2e\n", energy_balance / (absorbed_stellar + internal_flux));
+        printf("======================\n");
     }
     
     // Return radiation flux values for diagnostics

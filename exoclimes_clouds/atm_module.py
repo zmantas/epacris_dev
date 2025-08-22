@@ -58,239 +58,231 @@ def hypsometric(nlev, Tl, pe, mu, grav):
 
 @jit
 def vapour_pressure(vap_mw, cld_sp, T, p, rho, met):
+    # Function to calculate vapour pressure of a species in dyne
+    if cld_sp == 'C':
+        # Gail & Sedlmayr (2013) - I think...
+        p_vap = np.exp(3.27860e1 - 8.65139e4/(T + 4.80395e-1))
+    elif cld_sp == 'TiC':
+        # Kimura et al. (2023)
+        p_vap = 10.0**(-33600.0/T + 7.652) * atm
+    elif cld_sp == 'SiC':
+        # Elspeth 5 polynomial JANAF-NIST fit
+        p_vap = np.exp(-9.51431385e4/T + 3.72019157e1 + 1.09809718e-3*T \
+            - 5.63629542e-7*T**2 + 6.97886017e-11*T**3)
+    elif cld_sp == 'CaTiO3':
+        # Wakeford et al. (2017) - taken from VIRGA
+        p_vap = 10.0**(-72160.0/T + 30.24 - np.log10(p/1e6) - 2.0*met) * bar
+    elif cld_sp == 'TiO2':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-7.70443e4/T + 4.03144e1 - 2.59140e-3*T \
+            + 6.02422e-7*T**2 - 6.86899e-11*T**3)
+    elif cld_sp == 'VO':
+        # NIST 5 param fit
+        p_vap = np.exp(-6.74603e4/T + 3.82717e1 - 2.78551e-3*T \
+            + 5.72078e-7*T**2 - 7.41840e-11*T**3)
+    elif cld_sp == 'Al2O3':
+        # Wakeford et al. (2017) - taken from CARMA
+        p_vap = 10.0**(17.7 - 45892.6/T - 1.66*met) * bar
+    elif cld_sp == 'Fe':
+        # Visscher et al. (2010) - taken from CARMA
+        p_vap = 10.0**(7.23 - 20995.0/T) * bar
+    elif cld_sp == 'FeS':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-5.69922e4/T + 3.86753e1 - 4.68301e-3*T \
+            + 1.03559e-6*T**2 - 8.42872e-11*T**3)
+    elif cld_sp == 'FeO':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-6.30018e4/T + 3.66364e1 - 2.42990e-3*T \
+            + 3.18636e-7*T**2)
+    elif cld_sp == 'Mg2SiO4':
+        # Visscher et al. (2010)/Visscher notes - taken from CARMA
+        p_vap = 10.0**(14.88 - 32488.0/T - 1.4*met - 0.2*np.log10(p/1e6)) * bar
+    elif cld_sp == 'MgSiO3':
+        # Visscher - taken from VIRGA
+        p_vap = 10.0**(13.43 - 28665.0/T - met) * bar
+    elif cld_sp == 'MgO':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-7.91838e4/T + 3.57312e1 + 1.45021e-4*T \
+            - 8.47194e-8*T**2 + 4.49221e-12*T**3)
+    elif cld_sp == 'SiO2':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-7.28086e4/T + 3.65312e1 - 2.56109e-4*T \
+            - 5.24980e-7*T**2 + 1.53343E-10*T**3)
+    elif cld_sp == 'SiO':
+        # Gail et al. (2013)
+        p_vap = np.exp(-49520.0/T + 32.52)
+    elif cld_sp == 'Cr':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-4.78455e+4/T + 3.22423e1 - 5.28710e-4*T \
+            - 6.17347e-8*T**2 + 2.88469e-12*T**3)
+    elif cld_sp == 'MnS':
+        # Morley et al. (2012)
+        p_vap = 10.0**(11.532 - 23810.0/T - met) * bar
+    elif cld_sp == 'Na2S':
+        # Morley et al. (2012)
+        p_vap = 10.0**(8.550 - 13889.0/T - 0.5*met) * bar
+    elif cld_sp == 'ZnS':
+        # Elspeth 5 polynomial Barin data fit
+        p_vap = np.exp(-4.75507888e4/T + 3.66993865e1 - 2.49490016e-3*T \
+            + 7.29116854e-7*T**2 - 1.12734453e-10*T**3)
+    elif cld_sp == 'KCl':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-2.69250e4/T + 3.39574e+1 - 2.04903e-3*T \
+            - 2.83957e-7*T**2 + 1.82974e-10*T**3)
+    elif cld_sp == 'NaCl':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-2.79146e4/T + 3.46023e1 - 3.11287e3*T \
+            + 5.30965e-7*T**2 -2.59584e-12*T**3)
+    elif cld_sp == 'S2':
+        #--- Zahnle et al. (2016) ---
+        if (T < 413.0):
+            p_vap = np.exp(27.0 - 18500.0/T) * bar
+        else:
+            p_vap = np.exp(16.1 - 14000.0/T) * bar
+    elif cld_sp == 'S8':
+        #--- Zahnle et al. (2016) ---
+        if (T < 413.0):
+            p_vap = np.exp(20.0 - 11800.0/T) * bar
+        else:
+            p_vap = np.exp(9.6 - 7510.0/T) * bar
+    elif cld_sp == 'NH4Cl':
+        # Unknown - I think I fit this?
+        p_vap = 10.0**(7.0220 - 4302.0/T) * bar
+    elif cld_sp == 'H2O':
+        TC = T - 273.15
+        # Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
+        if (TC < 0.0):
+            f = 0.99882 * np.exp(0.00000008 * p/pa)
+            p_vap = np.exp(43.494 - (6545.8/(TC + 278.0)))/(TC + 868.0)**2.0 * pa * f
+        else:
+            f = 1.00071 * np.exp(0.000000045 * p/pa)
+            p_vap = np.exp(34.494 - (4924.99/(TC + 237.1)))/(TC + 105.0)**1.57 * pa * f
+    elif cld_sp == 'NH3':
+        # Blakley et al. (2024) - experimental to low T and pressure
+        p_vap = np.exp(-5.55 - 3605.0/T + 4.82792*np.log(T) - 0.024895*T + 2.1669e-5*T**2 - 2.3575e-8 *T**3) * bar
+    elif cld_sp == 'CH4':
+        # Frey & Schmitt (2009)
+        p_vap = np.exp(1.051e1 - 1.110e3/T - 4.341e3/T**2 + 1.035e5/T**3 - 7.910e5/T**4) * bar
+    elif cld_sp == 'NH4SH':
+        #--- E.Lee's fit to Walker & Lumsden (1897) ---
+        p_vap = 10.0**(7.8974 - 2409.4/T) * bar
+    elif cld_sp == 'H2S':
+        # Frey & Schmitt (2009)
+        p_vap = np.exp(12.98 - 2.707e3/T) * bar
+    elif cld_sp == 'H2SO4':
+        # GGChem 5 polynomial NIST fit
+        p_vap = np.exp(-1.01294e4/T + 3.55465e1 - 8.34848e-3*T)
+    elif cld_sp == 'CO':
+        # Frey & Schmitt (2009)
+        if (T < 61.55):
+            p_vap = np.exp(1.043e1 - 7.213e2/T - 1.074e4/T**2 + 2.341e5/T**3 - 2.392e6/T**4 + 9.478e6/T**5) * bar
+        else:
+            p_vap = np.exp(1.025e1 - 7.482e2/T - 5.843e3/T**2 + 3.939e4/T**3) * bar
+    elif cld_sp == 'CO2':
+        # Frey & Schmitt (2009)
+        if (T < 194.7):
+            p_vap = np.exp(1.476e1 - 2.571e3/T - 7.781e4/T**2 + 4.325e6/T**3 - 1.207e8/T**4 + 1.350e9/T**5) * bar
+        else:
+            p_vap = np.exp(1.861e1 - 4.154e3/T + 1.041e5/T**2) * bar
+    elif cld_sp == 'O2':
+        # Blakley et al. (2024) - experimental to low T and pressure (beta O2)
+        p_vap = np.exp(15.29 - 1166.2/T - 0.75587*np.log(T) + 0.14188*T - 1.8665e-3*T**2 + 7.582e-6*T**3) * bar
+    else:
+        print('Vapour pressure species not found: ', cld_sp)
+        print('quitting')
+        #quit()
 
-  # Function to calculate vapour pressure of a species in dyne
+    # Specific gas constant of condensable vapour
+    Rd_v = R/vap_mw
 
-  match cld_sp:
-    case 'C':
-      # Gail & Sedlmayr (2013) - I think...
-      p_vap = np.exp(3.27860e1 - 8.65139e4/(T + 4.80395e-1))
-    case 'TiC':
-      # Kimura et al. (2023)
-      p_vap = 10.0**(-33600.0/T + 7.652) * atm
-    case 'SiC':
-      # Elspeth 5 polynomial JANAF-NIST fit
-      p_vap =  np.exp(-9.51431385e4/T + 3.72019157e1 + 1.09809718e-3*T \
-        - 5.63629542e-7*T**2 + 6.97886017e-11*T**3)
-    case 'CaTiO3':
-      # Wakeford et al. (2017) -  taken from VIRGA
-      p_vap = 10.0**(-72160.0/T + 30.24 - np.log10(p/1e6) - 2.0*met) * bar
-    case 'TiO2':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-7.70443e4/T +  4.03144e1 - 2.59140e-3*T \
-        + 6.02422e-7*T**2 - 6.86899e-11*T**3)
-    case 'VO':
-      # NIST 5 param fit
-      p_vap = np.exp(-6.74603e4/T + 3.82717e1 - 2.78551e-3*T \
-        + 5.72078e-7*T**2 - 7.41840e-11*T**3)
-    case 'Al2O3':
-      # Wakeford et al. (2017) - taken from CARMA
-      p_vap = 10.0**(17.7 - 45892.6/T - 1.66*met) * bar
-    case 'Fe':
-      # Visscher et al. (2010) - taken from CARMA
-      p_vap = 10.0**(7.23 - 20995.0/T) * bar
-    case 'FeS':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-5.69922e4/T + 3.86753e1 - 4.68301e-3*T \
-        + 1.03559e-6*T**2 - 8.42872e-11*T**3)
-    case 'FeO':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-6.30018e4/T + 3.66364e1 - 2.42990e-3*T \
-        + 3.18636e-7*T**2)
-    case 'Mg2SiO4':
-      # Visscher et al. (2010)/Visscher notes - taken from CARMA
-      p_vap = 10.0**(14.88 - 32488.0/T - 1.4*met - 0.2*np.log10(p/1e6)) * bar
-    case 'MgSiO3':
-      # Visscher - taken from VIRGA
-      p_vap = 10.0**(13.43 - 28665.0/T - met) * bar
-    case 'MgO':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-7.91838e4/T + 3.57312e1 + 1.45021e-4*T \
-        - 8.47194e-8*T**2 + 4.49221e-12*T**3)
-    case 'SiO2':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-7.28086e4/T + 3.65312e1 - 2.56109e-4*T \
-        - 5.24980e-7*T**2 + 1.53343E-10*T**3) 
-    case 'SiO':
-      # Gail et al. (2013)
-      p_vap = np.exp(-49520.0/T + 32.52)
-    case 'Cr':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-4.78455e+4/T + 3.22423e1 - 5.28710e-4*T \
-        - 6.17347e-8*T**2 + 2.88469e-12*T**3)
-    case 'MnS':
-      # Morley et al. (2012)
-      p_vap = 10.0**(11.532 - 23810.0/T - met) * bar
-    case 'Na2S':
-      # Morley et al. (2012)
-      p_vap = 10.0**(8.550 - 13889.0/T - 0.5*met) * bar
-    case 'ZnS':
-      # Elspeth 5 polynomial Barin data fit
-      p_vap = np.exp(-4.75507888e4/T + 3.66993865e1 - 2.49490016e-3*T \
-        + 7.29116854e-7*T**2 - 1.12734453e-10*T**3)       
-    case 'KCl':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-2.69250e4/T + 3.39574e+1 - 2.04903e-3*T \
-        - 2.83957e-7*T**2 + 1.82974e-10*T**3)
-    case 'NaCl':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-2.79146e4/T + 3.46023e1 - 3.11287e3*T \
-        + 5.30965e-7*T**2 -2.59584e-12*T**3)
-    case 'S2':
-      #--- Zahnle et al. (2016) ---
-      if (T < 413.0):
-        p_vap = np.exp(27.0 - 18500.0/T) * bar
-      else:
-        p_vap = np.exp(16.1 - 14000.0/T) * bar
-    case 'S8':
-      #--- Zahnle et al. (2016) ---
-      if (T < 413.0):
-        p_vap = np.exp(20.0 - 11800.0/T) * bar
-      else:
-        p_vap = np.exp(9.6 - 7510.0/T) * bar       
-    case 'NH4Cl':
-      # Unknown - I think I fit this?
-      p_vap = 10.0**(7.0220 - 4302.0/T) * bar
-    case 'H2O':
-      TC = T - 273.15
-      # Huang (2018) - A Simple Accurate Formula for Calculating Saturation Vapor Pressure of Water and Ice
-      if (TC < 0.0):
-        f = 0.99882 * np.exp(0.00000008 * p/pa)
-        p_vap = np.exp(43.494 - (6545.8/(TC + 278.0)))/(TC + 868.0)**2.0 * pa * f
-      else:
-        f = 1.00071 * np.exp(0.000000045 * p/pa)
-        p_vap = np.exp(34.494 - (4924.99/(TC + 237.1)))/(TC + 105.0)**1.57 * pa * f
-    case 'NH3':
-      # Blakley et al. (2024) - experimental to low T and pressure
-      p_vap = np.exp(-5.55 - 3605.0/T + 4.82792*np.log(T) - 0.024895*T + 2.1669e-5*T**2 - 2.3575e-8 *T**3) * bar
-    case 'CH4':
-      # Frey & Schmitt (2009)
-      p_vap = np.exp(1.051e1 - 1.110e3/T - 4.341e3/T**2 + 1.035e5/T**3 - 7.910e5/T**4) * bar
-    case 'NH4SH':
-      #--- E.Lee's fit to Walker & Lumsden (1897) ---
-      p_vap = 10.0**(7.8974 - 2409.4/T) * bar
-    case 'H2S':
-      # Frey & Schmitt (2009)
-      p_vap = np.exp(12.98 - 2.707e3/T) * bar
-    case 'H2SO4':
-      # GGChem 5 polynomial NIST fit
-      p_vap = np.exp(-1.01294e4/T + 3.55465e1 - 8.34848e-3*T)      
-    case 'CO':
-      # Frey & Schmitt (2009)
-      if (T < 61.55):
-        p_vap = np.exp(1.043e1 - 7.213e2/T - 1.074e4/T**2 + 2.341e5/T**3 - 2.392e6/T**4 + 9.478e6/T**5) * bar
-      else:
-        p_vap = np.exp(1.025e1 - 7.482e2/T - 5.843e3/T**2 + 3.939e4/T**3) * bar
-    case 'CO2':
-      # Frey & Schmitt (2009)
-      if (T < 194.7):
-        p_vap = np.exp(1.476e1 - 2.571e3/T - 7.781e4/T**2 + 4.325e6/T**3 - 1.207e8/T**4 + 1.350e9/T**5) * bar
-      else:
-        p_vap = np.exp(1.861e1 - 4.154e3/T + 1.041e5/T**2) * bar
-    case 'O2':
-      # Blakley et al. (2024) - experimental to low T and pressure (beta O2)
-      p_vap = np.exp(15.29 - 1166.2/T - 0.75587*np.log(T) + 0.14188*T - 1.8665e-3*T**2 + 7.582e-6*T**3) * bar
-    case _:
-      print('Vapour pressure species not found: ', cld_sp)
-      print('quitting')
-      #quit()
+    # Saturation mass mixing ratio
+    q_s = (p_vap/(Rd_v * T))/rho
 
-
-  # Specific gas constant of condensable vapour 
-  Rd_v = R/vap_mw
-
-  # Saturation mass mixing ratio
-  q_s = (p_vap/(Rd_v * T))/rho
-
-  return p_vap, q_s
+    return p_vap, q_s
 
 @jit
 def surface_tension(cld_sp, T):
+    # Function to calculate the surface tension (erg cm^-2) for different species
+    TC = T - 273.15
 
-  # Function to calculate the surface tension (erg cm^-2) for different species
+    if cld_sp == 'C':
+        # Tabak et al. (1995)
+        sig = 1400.0
+    elif cld_sp == 'TiC':
+        # Chigai et al. (1999)
+        sig = 1242.0
+    elif cld_sp == 'SiC':
+        # Nozawa et al. (2003)
+        sig = 1800.0
+    elif cld_sp == 'CaTiO3':
+        # Kozasa et al. (1987)
+        sig = 494.0
+    elif cld_sp == 'TiO2':
+        # Sindel et al. (2022)
+        sig = 589.79 - 0.0708 * T
+    elif cld_sp == 'Fe':
+        # http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+        sig = 1862.0 - 0.39 * (TC - 1530.0)
+    elif cld_sp == 'Fe2O3':
+        sig = 410.0
+    elif cld_sp == 'FeO':
+        # Janz (1988)
+        sig = 585.0
+    elif cld_sp == 'Al2O3':
+        # Pradhan et al. (2009)
+        sig = 1024.0 - 0.177 * T
+    elif cld_sp == 'MgSiO3':
+        # Janz (1988)
+        sig = 197.3 + 0.098 * T
+    elif cld_sp == 'Mg2SiO4':
+        # Kozasa et al. (1989)
+        sig = 436.0
+    elif cld_sp == 'SiO':
+        # Gail and Sedlmayr (1986)
+        sig = 500.0
+    elif cld_sp == 'SiO2':
+        # Janz (1988)
+        sig = 243.2 + 0.031 * T
+    elif cld_sp == 'Cr':
+        # http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
+        sig = 1642.0 - 0.20 * (TC - 1860.0)
+    elif cld_sp == 'MnS':
+        sig = 2326.0
+    elif cld_sp == 'Na2S':
+        sig = 1033.0
+    elif cld_sp == 'KCl':
+        # Janz (1988)
+        sig = 160.4 - 0.07 * T
+    elif cld_sp == 'NaCl':
+        # Janz (1988)
+        sig = 191.16 - 0.07188 * T
+    elif cld_sp == 'ZnS':
+        sig = 860.0
+    elif cld_sp == 'H2O':
+        # Hale and Plummer (1974)
+        sig = 141.0 - 0.15 * TC
+    elif cld_sp == 'NH3':
+        # Weast et al. (1988)
+        sig = 23.4
+    elif cld_sp == 'NH4Cl':
+        sig = 56.0
+    elif cld_sp == 'NH4SH':
+        sig = 50.0
+    elif cld_sp == 'CH4':
+        # USCG (1984)
+        sig = 14.0
+    elif cld_sp == 'H2S':
+        # Nehb and Vydra (2006)
+        sig = 58.1
+    elif cld_sp in ('S2', 'S8'):
+        # Fanelli (1950)
+        sig = 60.8
+    else:
+        print('Species surface tension not found: ', cld_sp)
+        sig = 10.0
 
-  TC = T - 273.15
-
-  match cld_sp:
-    case 'C':
-      # Tabak et al. (1995)
-      sig = 1400.0
-    case 'TiC':
-      # Chigai et al. (1999)
-      sig = 1242.0
-    case 'SiC':
-      # Nozawa et al. (2003)
-      sig = 1800.0
-    case 'CaTiO3':
-      # Kozasa et al. (1987)
-      sig = 494.0      
-    case 'TiO2':
-      # Sindel et al. (2022)
-      sig = 589.79 - 0.0708 * T
-    case 'Fe':
-      # http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
-      sig = 1862.0 - 0.39 * (TC - 1530.0)
-    case 'Fe2O3':
-      sig = 410.0
-    case 'FeO':
-      # Janz (1988)
-      sig = 585.0
-    case 'Al2O3':
-      # Pradhan et al. (2009)
-      sig = 1024.0 - 0.177 * T
-    case 'MgSiO3':
-      # Janz (1988)
-      sig = 197.3 + 0.098 * T
-    case 'Mg2SiO4':
-      # Kozasa et al. (1989)
-      sig = 436.0
-    case 'SiO':
-      # Gail and Sedlmayr (1986)
-      sig = 500.0
-    case 'SiO2':
-      # Janz (1988)
-      sig = 243.2 + 0.031 * T
-    case 'Cr':
-      # http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html
-      sig = 1642.0 - 0.20 * (TC - 1860.0)      
-    case 'MnS':
-      sig = 2326.0
-    case 'Na2S':
-      sig = 1033.0
-    case 'KCl':
-      # Janz (1988)
-      sig = 160.4 - 0.07 * T
-    case 'NaCl':
-      # Janz (1988)
-      sig = 191.16 - 0.07188 * T
-    case 'ZnS':
-      sig = 860.0
-    case 'H2O':
-      # Hale and Plummer (1974)
-      sig = 141.0 - 0.15 * TC
-    case 'NH3':
-      # Weast et al. (1988)
-      sig = 23.4
-    case 'NH4Cl':
-      sig = 56.0
-    case 'NH4SH':
-      sig = 50.0
-    case 'CH4':
-      # USCG (1984)
-      sig = 14.0
-    case 'H2S':
-      # Nehb and Vydra (2006)
-      sig = 58.1
-    case 'S2','S8':
-      # Fanelli (1950)
-      sig = 60.8
-    case _:
-      print('Species surface tension not found: ', cld_sp)
-      sig = 10.0
-
-  sig = np.maximum(10.0, sig) 
-
-  return sig
+    sig = np.maximum(10.0, sig)
+    return sig
 
 @jit
 def visc_mixture(T, nbg, bg_VMR, bg_mw, bg_d, bg_LJ):

@@ -53,11 +53,28 @@ extern int CONDENSIBLES[];
 extern double Tdoub[];
 extern int RTstepcount;
 
+// Enhanced cloud physics arrays
+extern double particle_radius_um[zbin+1][MAX_CONDENSIBLES];
+extern double fall_velocity_ms[zbin+1][MAX_CONDENSIBLES];
+extern double cloud_retention[zbin+1][MAX_CONDENSIBLES];
+
 // Convection function declarations
 void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]);
 void ms_rainout(int lay, double* mass_loss_ratio);
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);
 void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]);
+
+// Cloud physics functions
+void apply_enhanced_cloud_physics(int layer, double gravity);
+void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes);
+void apply_equilibrium_cloud_distribution(double gravity);
+void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass);
+void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, double deltaP, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height);
+
+// Global alpha storage functions
+void initialize_global_alpha_values();
+void update_global_alpha_values(int layer, int species_index, double alpha_value);
+double get_global_alpha_value(int layer, int species_index);
 
 // Dynamic condensation detection functions
 void initialize_condensibles_mode();
@@ -65,6 +82,14 @@ int check_species_condensible(int species_id, double temp, double pressure, doub
 void update_condensibles_list(int layer);
 void detect_condensibles_atmosphere();
 void report_condensibles_changes(int iteration);
+
+// Opacity reinterpolation functions
+extern void reinterpolate_all_cia_opacities();
+extern void reinterpolate_all_opacities();
+
+// Cleanup functions
+extern void cleanup_opacity_cache(void);
+extern void cleanup_cia_cache();
 
 #endif /* !__GLOBAL_H__ */
 

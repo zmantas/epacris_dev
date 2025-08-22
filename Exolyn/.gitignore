@@ -1,0 +1,9 @@
+__pycache__/
+figure/
+old/
+test/
+util/failpars/
+*.png
+*.so
+*.swp
+paperplot/

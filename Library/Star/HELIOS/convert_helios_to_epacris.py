@@ -65,16 +65,22 @@ def validate_spectrum(wavelength_nm, flux_wm2_nm, reference_file=None):
     return True
 
 # Define constants
+
 AU_TO_M = 1.495978707e8  # 1 AU in km (matching MATLAB value)
 RSUN_TO_KM = 695700  # Solar radius in km (matching MATLAB value)
-STAR_RADIUS = 1.2175 * RSUN_TO_KM  # Alpha A radius in km
+
+### IMPORTNT SET STAR RADIUS CORRECTLY
+STAR_RADIUS = 0.82 * RSUN_TO_KM  # star radius in km
 
 # Get the directory where this script is located
 script_dir = Path(__file__).parent.absolute()
 
 # Path to the input file
-input_file = script_dir / "Alpha_A_spectra.dat"
-output_file = script_dir / "Alpha_A_spectra_converted.dat"
+#input_file = script_dir / "Alpha_A_spectra.dat"
+#output_file = script_dir / "Alpha_A_spectra_converted.dat"
+
+input_file = script_dir / "TOI-199_spectra.dat"
+output_file = script_dir / "TOI-199_spectra_converted.dat"
 
 # Check if the input file exists
 if not input_file.exists():
@@ -118,10 +124,11 @@ flux_wm2_nm = f4rr / 1000
 total_flux = np.trapz(f4r, w4rr)  # Total flux at stellar surface
 teff_derived = (total_flux / 5.67e-8)**(1/4)  # Derive Teff from total flux
 print(f"\nDerived effective temperature: {teff_derived:.0f} K")
-print(f"Expected effective temperature: 5790 K")
+print(f"Expected effective temperature: 5255 K")
 
 # Validate the conversion
 reference_file = script_dir.parent / "solar.txt"
+print(f"Validating against {reference_file}")
 validate_spectrum(wavelength_nm, flux_wm2_nm, str(reference_file))
 
 # Save the converted data

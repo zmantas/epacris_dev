@@ -10,6 +10,6 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
                          double *tempb, double *P, char *diagnostic_header,
                          double Tint, double tol_rc, double tol_rc_r,
                          double *cp_array, double *lapse_array, int *isconv_array, double **saturation_ratio_array,
-                         double *pot_temp_array, int nmax_iteration);
+                         double *pot_temp_array, int nmax_iteration, double **particle_sizes);
 
 #endif // PLOT_UTILS_H 

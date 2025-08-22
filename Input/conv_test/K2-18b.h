@@ -42,6 +42,12 @@ Note: The parameters in this file can be modified to model different planets aro
                             // 4 = PTRANS-I pentadiagonal solver
                             // 5 = Sogabe 2008 pentadiagonal solver (Algorithms 2&3)
 
+#define CLOUD_REDISTRIBUTION 0 // 0 = no cloud redistribution
+                            // 1 = exponential cloud distribution
+                            // 2 = Exolyn with dt (not implemented)
+                            // 3 = Exolyn steady state cloud redistribution
+#define ENABLE_COLD_TRAP  1  // 0 = disabled, 1 = enabled (dynamically detects based on H2O condensation)
+
 //--------------------------------------------------------------------- 
 /* Initial Concentration Setting */
 #define IMODE       0   /*  0: Calculate initial concentrations from chemical equilibrium sub-routines (not rad);
@@ -51,13 +57,13 @@ Note: The parameters in this file can be modified to model different planets aro
 			4: Import from results of previous calculations in the standard form (TP import only for rad) 
                         */
 
-#define ELE_ABUN        "Input/elemental_abundance_files/atom-100xsolar.dat"
+#define ELE_ABUN        "Input/elemental_abundance_files/new_x1Solar.dat"
 
 /* Iteration Conditions */
-#define NMAX        1       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     10       /* Maximum Radiative - Convective Iterations, minimum 1 */
-#define NMAX_RT     300  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      100  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
+#define NMAX        3       /* Maximum Climate - Chemistry Iterations */
+#define NMAX_RC     5       /* Maximum Radiative - Convective Iterations, minimum 1 */
+#define NMAX_RT     4000  /* Maximum Radiative Transfer Iterations */
+#define NRT_RC      4000  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 #define PRINT_ITER  100  //x steps to print parameters
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)
@@ -71,7 +77,7 @@ Note: The parameters in this file can be modified to model different planets aro
 //R_Planet = 1.95 R_E
 #define RADIUS_PLANET 1.66470e+07    // m Planet's radius
 #define ORBIT      0.1120      // AU  Planet's semi-major axis, equivalent to around Sun
-
+#define KZZ        1.0E+8      // Eddy diffusion coefficient in cm²/s
 /* Star spectrum */
 #define STAR_SPEC   "Library/Star/gj876.txt"
 #define STAR_RADIUS 0.44 // Solar rad
@@ -83,7 +89,14 @@ Note: The parameters in this file can be modified to model different planets aro
 
 #define FADV	    0.25     /* Advection factor: 0.25=uniformly distributed, 0.6667=no Advection */
 //#define THETAREF    0.5000		/* Slant Path Angle in radian */
-#define THETAANGLE  30.000		// Slant Path Angle in degrees: 60 for global average, 30 for hemispheric
+#define THETAANGLE  0.		// Slant Path Angle in degrees: 60 for global average, 30 for hemispheric
+
+/* HELIOS-consistent radiative transfer mode switch */
+/* Choose ONE of the following options: */
+#define DIRECT_BEAM_MODE 0    /* 0 = Pure diffuse mode (like HELIOS dir_beam=0, uses FADV) */
+//#define DIRECT_BEAM_MODE 1    /* 1 = Pure direct beam mode (like HELIOS dir_beam=1, uses THETAANGLE) */
+/* Note: DIRECT_BEAM_MODE 0 uses FADV and ignores THETAANGLE */
+/*       DIRECT_BEAM_MODE 1 uses THETAANGLE and ignores FADV */
 #define PSURFAB	    0.0000		/* Planet Surface Reflectivity */
 #define PSURFEM	    1.0000		/* Planet Surface Emissivity */
 /* Initial Heat Flux */
@@ -152,7 +165,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) - RELAXED from 1e-3 */
 #define Tol_RC      1.0E+0  /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 - RELAXED from 1e-1 */
 #define Tol_FRATIO  1.0E-4  /* convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4 */
-
+#define Tol_RC_gradient 1.0e-0  /* convergence tolerance in unbalanced radiative flux gradient */
 //this is for matrix solver i think
 #define R_RELAX     1.0e-1     /* relaxation factor in implicit Euler stepping of radiative balance */
 #define DT_MAX      1.0e-1     /* maximum dT change in implicit Euler stepping of radiative balance */

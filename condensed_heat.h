@@ -34,6 +34,9 @@ double O2_condensed_heat_capacity(double T);
 // Nitrogen (N2) - Liquid and Solid
 double N2_condensed_heat_capacity(double T);
 
+// Hydrogen Sulfide (H2S) - Liquid and Solid
+double H2S_condensed_heat_capacity(double T);
+
 // Generic function for other condensed species
 double generic_condensed_heat_capacity(int species, double T);
 

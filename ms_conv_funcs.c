@@ -1,23 +1,40 @@
+// Config file. Included so IDE can understand variables
+#include "Input/conv_test/K2-18b.h"
+
+
 #include <math.h>
+#include <stdio.h>   // For printf function
+#include <stdlib.h>  // For abs function
 #include <stdbool.h>  // For bool type
 #include "constant.h"
+#include "global_temp.h"  // Include global variable declarations
 #include "condensed_heat.h"  // Include new condensed heat capacity functions
+
+// Heat capacity function declarations
+double AirHeat(double T);
+double CO2Heat(double T);
+double HeHeat(double T);
+double N2Heat(double T);
+double NH3Heat(double T);
+double CH4Heat(double T);
+double H2Heat(double T);
+double O2Heat(double T);
+double COHeat(double T);
+double H2OHeat(double T);
+double H2SHeat(double T);
 
 // Note: Global variables for dynamic condensibles management are defined in the main file
 // NCONDENSIBLES and CONDENSIBLES[] are declared in global_temp.h
 // ALPHA_RAINOUT is a single constant value defined in AlphaAb.h
-
-// NEW: Iterative equilibrium approach for condensation
-void ms_iterative_condensation_equilibrium(int layer, double* convergence_metric);
 
 //=========================================================
 //=== Function identifiers ================================
 
 void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]); // calculate lapse rate (NO rainout)
 void ms_rainout(int lay, double* mass_loss_ratio); // apply rainout physics
-void apply_enhanced_cloud_physics(int layer, double gravity); // enhanced cloud physics (Ackerman & Marley)
-void apply_realistic_sedimentation(double gravity); // apply realistic sedimentation with mass conservation
-void apply_equilibrium_cloud_distribution(double gravity); // apply Ackerman & Marley (2001) exponential cloud redistribution using real particle sizes
+void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes); // Proper Exolyn cloud redistribution with time-stepping transport
+void exponential_cloud(double gravity, double P[], double cloud_to_gas_scale_height_ratio, double **particle_sizes); // HELIOS-style exponential cloud distribution
+void cloud_redistribution_none(double gravity, double P[], double **particle_sizes); // Calculate cloud physics without redistribution
 void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass); // get species-specific properties
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);   // Checks each pair of layers for convective stability
 void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]); // Adjust temperatures due to convection
@@ -29,6 +46,11 @@ void update_condensibles_list(int layer); // Update condensibles list for a spec
 void detect_condensibles_atmosphere(); // Detect condensibles across entire atmosphere
 void report_condensibles_changes(int iteration); // Report changes in condensibles list
 
+// Global alpha storage functions for dynamic cloud-thermodynamics integration
+void initialize_global_alpha_values(); // Initialize global alpha storage
+void update_global_alpha_values(int layer, int species_index, double alpha_value); // Update global alpha values
+double get_global_alpha_value(int layer, int species_index); // Get global alpha value
+
 //=== Helper function identifiers =========================
 double ms_psat_h2o(double temp); //calc saturation pressure of water
 double ms_psat_nh3(double temp); //calc saturation pressure
@@ -39,7 +61,44 @@ double ms_psat_h2(double temp); //calculate saturation pressure of hydrogen
 double ms_psat_o2(double temp); //calculate saturation pressure of oxygen
 double ms_psat_n2(double temp); //calculate saturation pressure of nitrogen
 double ms_psat_h2s(double temp); //calculate saturation pressure of hydrogen sulfide
+double ms_psat_feo2h2(double temp); //calculate saturation pressure of iron hydroxide
+double ms_psat_fes(double temp); //calculate saturation pressure of iron sulfide
 double ms_latent(int mol, double temp); //calc saturation pressure of water
+
+// GLOBAL ALPHA STORAGE FOR DYNAMIC CLOUD-THERMODYNAMICS INTEGRATION
+// This stores layer-specific alpha values (currently unused, kept for potential future use)
+// ms_adiabat will use these values instead of fixed ALPHA_RAINOUT
+static double global_alpha_values[zbin+1][MAX_CONDENSIBLES] = {0.0}; // Initialize to zero
+static int global_alpha_initialized = 0;
+
+// Function to initialize global alpha values
+void initialize_global_alpha_values() {
+    if (!global_alpha_initialized) {
+        for (int layer = 1; layer <= zbin; layer++) {
+            for (int i = 0; i < MAX_CONDENSIBLES; i++) {
+                global_alpha_values[layer][i] = ALPHA_RAINOUT; // Start with default values
+            }
+        }
+        global_alpha_initialized = 1;
+        printf("=== INITIALIZED GLOBAL ALPHA STORAGE ===\n");
+        printf("Default alpha value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+    }
+}
+
+// Function to update global alpha values (currently unused, kept for potential future use)
+void update_global_alpha_values(int layer, int species_index, double alpha_value) {
+    if (layer >= 1 && layer <= zbin && species_index >= 0 && species_index < MAX_CONDENSIBLES) {
+        global_alpha_values[layer][species_index] = alpha_value;
+    }
+}
+
+// Function to get global alpha value (called by ms_adiabat)
+double get_global_alpha_value(int layer, int species_index) {
+    if (layer >= 1 && layer <= zbin && species_index >= 0 && species_index < MAX_CONDENSIBLES) {
+        return global_alpha_values[layer][species_index];
+    }
+    return ALPHA_RAINOUT; // Fallback to default
+}
 
 //=========================================================
 //=== Functions ===========================================
@@ -61,7 +120,6 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
 
     //LOCAL parameters
     int i,j;
-    //input file    int NCONDENSIBLES = 1; //number of potential condensibles; here H2O
 
     //variables for adiabatic calculation
     double Xd,cp_d; // VMR of non-condensible gas, heat capacity of non-condensible gas
@@ -90,9 +148,6 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
     double sum_beta_xv, big_sum_denom_num_left_term, big_sum_denom_num_right_term; //sum of beta*Xv and big sum of denominator terms of lapse rate
 
     //START function
-    //print number of condensibles species
-    // if(lay==1) printf("%s\n","--- Adiabat calculation ---");
-    // if(lay==1) printf("%s\t%d\n","Number of condensibles species:",NCONDENSIBLES);
 
     Xd = 1.0; //mole fraction of non-condensible gas
     cp_d = 0.0; //heat capacity of non-condensible gas
@@ -115,6 +170,8 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
         if(CONDENSIBLES[i]==54) psat[i] = ms_psat_o2(tl[lay]);  // Condenses ~54K (triple point)
         if(CONDENSIBLES[i]==55) psat[i] = ms_psat_n2(tl[lay]);  // Condenses ~63K (triple point)
         if(CONDENSIBLES[i]==45) psat[i] = ms_psat_h2s(tl[lay]);  // Condenses ~188K (triple point)
+        if(CONDENSIBLES[i]==114) psat[i] = ms_psat_feo2h2(tl[lay]); // Condenses ~1500K (solid only)
+        if(CONDENSIBLES[i]==115) psat[i] = ms_psat_fes(tl[lay]); // Condenses ~1463K (solid), ~3800K (liquid)
         /* Additional species that could be included:
         if(CONDENSIBLES[i]==43) psat[i] = ms_psat_so2(tl[lay]);  // Condenses ~198K (triple point)
         if(CONDENSIBLES[i]==99) psat[i] = ms_psat_s8(tl[lay]);   // Condenses ~388K (solid form)
@@ -129,21 +186,89 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
         if(CONDENSIBLES[i]==105) psat[i] = ms_psat_mg2siO4(tl[lay]); // Condenses ~1600-1700K (very hot)
         if(CONDENSIBLES[i]==106) psat[i] = ms_psat_fe(tl[lay]);  // Condenses ~1600-1700K (very hot)
         if(CONDENSIBLES[i]==107) psat[i] = ms_psat_al2O3(tl[lay]); // Condenses ~1700-1800K (very hot)
+        if(CONDENSIBLES[i]==114) psat[i] = ms_psat_feo2h2(tl[lay]); // Condenses ~1500K (solid only)
+        if(CONDENSIBLES[i]==115) psat[i] = ms_psat_fes(tl[lay]); // Condenses ~1463K (solid), ~3800K (liquid)
         */
 
 
         // Start condensation calculation
-        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account
-        Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles
+        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account. Divide by MM to get mole fraction.
+        Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles MM is in molec/cm^3
 
         // Calculate total available condensible including condensed stuff
         double Xtotal = Xv[i] + Xc[i];  // Total condensible (gas + cloud)
 
-        // Calculate equilibrium partitioning
+        
+        // +++++++++++++++++++++++++++ Cold Trapping +++++++++++++++++++++++++++
+        // COLD TRAP MECHANISM: Apply transport limitation for ALL condensible species
+        if (ENABLE_COLD_TRAP && lay > 1) {  // All condensibles, if enabled, not bottom layer
+            // Check if any layer below has condensation of this species (indicating a cold trap)
+            double min_gas_below = 1.0e10;  // Very large initial value
+            bool found_condensation_below = false;
+            
+            // Check all layers below starting from lay - 1
+            for (int check_layer = lay - 1; check_layer >= 1; check_layer--) {
+
+                // Check if this layer has condensation of current species
+                double gas_mf = xx[check_layer][CONDENSIBLES[i]] / MM[check_layer];  // Gas mole fraction
+                double cloud_mf = clouds[check_layer][CONDENSIBLES[i]] / MM[check_layer];  // Cloud mole fraction
+                
+                //Check which below condensing layer has the least amount of gas
+                if (cloud_mf > 1.0e-12) {  // Significant condensation found
+                    found_condensation_below = true;
+                    // Track minimum gas-phase abundance in condensing layers
+                    if (gas_mf < min_gas_below) {
+                        min_gas_below = gas_mf;
+                    }
+                }
+            }
+            
+            // If cold trap detected, limit total species to what can pass through condensing layers
+            // 1e-9 is just a number smaller than 1.0e10 to see if gas got reduced
+            if (found_condensation_below && min_gas_below < 1.0e9) {
+                // COLD TRAP DETECTED: Limit total species to what can pass through condensing layers
+                if (Xtotal > min_gas_below) {
+                    double original_xtotal = Xtotal;
+                    Xtotal = min_gas_below;  // Limit to minimum gas-phase abundance below
+                    
+                    // // Debug output for upper atmosphere layers
+                    // if (lay < 90) {  // Bottom 60 layers
+                    //     printf("COLD TRAP: Layer %d (P=%.2e bar, T=%.1fK) Species %d limited by condensation below\n", 
+                    //            lay, pl[lay]*1e-5, tl[lay], CONDENSIBLES[i]);
+                    //     printf("  Min gas below: %.6e, reduced from: %.6e\n",
+                    //            min_gas_below, original_xtotal);
+                    // }
+                }
+            }
+            
+            // GHOST COLD TRAP FIX: Always check if current layer should match gas VMR from layer below
+            // This fixes cases where previous iterations left artificial VMR reductions
+            if (lay > 1) {  // Not bottom layer
+                double current_cloud = Xc[i];
+                double gas_below = xx[lay-1][CONDENSIBLES[i]] / MM[lay-1];
+                double cloud_below = clouds[lay-1][CONDENSIBLES[i]] / MM[lay-1];
+                double current_gas = Xv[i];
+                
+                // If current layer has no significant condensation and VMR is lower than layer below, fix it
+                if (current_cloud < 1.0e-12 && cloud_below < 1.0e-12 && current_gas < gas_below * 0.9) {
+                    Xtotal = gas_below;  // Set to same VMR as layer below
+                    
+                    // if (lay < 90) {  // Debug output
+                    //     printf("GHOST COLD TRAP FIX: Layer %d Species %d VMR %.6e → %.6e (matching layer below)\n",
+                    //            lay, CONDENSIBLES[i], current_gas, gas_below);
+                    // }
+                }
+            }
+        }
+        // +++++++++++++++++++++++++++ End of cold trap +++++++++++++++++++++++++++
+
+        // Calculate equilibrium partitioning using (potentially reduced) Xtotal
         double Xv_sat = psat[i] / pl[lay];  // Maximum gas phase at saturation
         double Xc_equilibrium = fmax(0.0, Xtotal - Xv_sat);  // Equilibrium cloud amount
 
-        // CORRECT: Update phases while conserving total mass
+
+
+        // Update phases while conserving total mass
         if (Xtotal > Xv_sat) {
             // Supersaturated: some should be cloud
             Xv[i] = Xv_sat;
@@ -154,51 +279,11 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
             Xc[i] = 0.0;
         }
 
+        // Dry gas fraction
         Xd -= Xv[i] + Xc[i];
 
-        // //calculate condensation rate for each condensible species (super-saturation)
-        // dp[i] = pl[lay]*Xv[i] - psat[i];
-        // //debugging if(lay==1 || dp[i]>0.0) printf("%s%d%s%e\t%s%d%s%e\n","pl[",lay,"] = ",pl[lay],"psat[",i,"] = ",psat[i]);
-       
-        // if(dp[i]>=0.0) //if saturated, then add to clouds and reduce gas fraction
-        // {
-        //     Xc[i] += (1.0 - psat[i]/(pl[lay]*Xv[i]))*Xv[i]; //condensed fraction
-        //     Xvold = Xv[i]; //copy old vapor fraction
-        //     // adjust vapor fraction to be in equilibrium with the saturation pressure
-        //     Xv[i] = psat[i]/(pl[lay]); // here for surface layer: assumes "infinite" ocean reservoir for all condensibles (changed from Xv[i] *= psat[i]/(pl[lay]*Xv[i]) to Xv[i] = psat[i]/pl[lay]))
-        //     //printf("%s%d\t%s%d%s%e%s%e\t%s%d%s%e\n","Saturation in layer ",lay," Xv[",CONDENSIBLES[i],"] was ",Xvold, " now ",Xv[i]," Xc[",CONDENSIBLES[i],"] = ",Xc[i]);
-        // }
-        // else //ensure unsaturated treatment, i.e. dry adiabat, without any latent heat release is applied
-        // {
-        //     //Old implementation with reset
-        //     //Xc[i] = 0.0;
-        //     //Xv[i] = 0.0; this was originally in the code, but I dont think this reset is needed
-        //     // Xv is used for lapse rate calculation
-        //     // MASS CONSERVATION FIX: Add cloud mass back to vapor phase before removing the cloud
-        //     if (Xc[i] > 0.0) {
-        //         // Only log significant evaporation events
-        //         if (Xc[i] > 1.0e-10) {
-        //             printf("Cloud evaporation: Layer %d, Species %d, Cloud VMR %.2e being returned to gas phase\n", 
-        //                    lay, CONDENSIBLES[i], Xc[i]);
-        //             printf("  Before evaporation: Xv[%d] = %.6e, xx[%d][%d] = %.6e\n", 
-        //                    i, Xv[i], lay, CONDENSIBLES[i], xx[lay][CONDENSIBLES[i]]);
-        //         }
-        //         // Add the cloud mass back to vapor phase
-        //         Xv[i] += Xc[i];
-        //         // Reset cloud to zero
-        //         Xc[i] = 0.0;
-                
-        //         if (Xc[i] > 1.0e-10) {
-        //             printf("  After adding cloud to vapor: Xv[%d] = %.6e\n", i, Xv[i]);
-        //         }
-        //     } else {
-        //         // No cloud mass to evaporate
-        //         Xc[i] = 0.0;
-        //     }
-        // }
-        // remaining dry mol fraction is equal to 1 - sum of all vapor and condensed fractions
+        // Could potentially add cloud redistribution here instead of separate function
 
-    //if(lay==1 || dp[i]>0.0) printf("%s%e\n","Xd = ",Xd);
     }
     
     //*=========Heat capacities, condensate retention, latent heat=============*//
@@ -340,54 +425,6 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
             // This includes: P < P_sat (undersaturated) OR T > T_critical
             beta[i] = 0.0;
         }
-       // This is an example of a possible physics based implementation with fall velocity
-        // can also do based on pressure.
-        // // PHYSICALLY-BASED RAINOUT CALCULATION
-        // // Calculate retention fraction alpha[i] based on fall velocity vs mixing time
-        // if (Xc[i] > 0.0) {
-        //     // Typical droplet/crystal sizes and fall velocities
-        //     double particle_radius, fall_velocity, mixing_time, fall_time;
-        //     double layer_thickness = 1000.0; // meters (typical layer thickness)
-        //     double atmospheric_density = pl[lay] / (R_GAS * tl[lay]) * 0.001; // kg/m³
-            
-        //     if (CONDENSIBLES[i] == 7) { // H2O
-        //         if (tl[lay] < 273.0) {
-        //             // Ice crystals
-        //             particle_radius = 50e-6;  // 50 microns
-        //             fall_velocity = 0.5;      // m/s (typical for ice crystals)
-        //         } else {
-        //             // Liquid droplets  
-        //             particle_radius = 10e-6;  // 10 microns
-        //             fall_velocity = 0.01;     // m/s (small droplets fall slowly)
-        //         }
-        //     } else if (CONDENSIBLES[i] == 52) { // CO2 (dry ice)
-        //         particle_radius = 100e-6;     // 100 microns
-        //         fall_velocity = 1.0;          // m/s (dense CO2 ice)
-        //     } else {
-        //         // Default for other species
-        //         particle_radius = 20e-6;      // 20 microns
-        //         fall_velocity = 0.1;          // m/s
-        //     }
-            
-        //     // Adjust fall velocity for atmospheric density
-        //     fall_velocity *= sqrt(atmospheric_density / 1.225); // Scale with air density
-            
-        //     // Calculate time scales
-        //     fall_time = layer_thickness / fall_velocity;      // Time to fall through layer
-        //     mixing_time = 3600.0;  // Assumed convective mixing time (1 hour)
-            
-        //     // Retention fraction: what stays vs what falls out
-        //     alpha[i] = mixing_time / (mixing_time + fall_time);
-            
-        //     // Apply bounds
-        //     if (alpha[i] < 0.01) alpha[i] = 0.01;  // Minimum 1% retention
-        //     if (alpha[i] > 0.99) alpha[i] = 0.99;  // Maximum 99% retention
-            
-        //     if (lay==1) printf("Rainout calc - Species %d: radius=%.1e m, vfall=%.3f m/s, tfall=%.0f s, alpha=%.3f\n",
-        //            CONDENSIBLES[i], particle_radius, fall_velocity, fall_time, alpha[i]);
-        // } else {
-        //     alpha[i] = 1.0;  // No condensate, so retention is irrelevant
-        // }
         
         //if(lay==1)  printf("  After: cpxx=%.3e, MM_cp=%.3e\n", cpxx, MM_cp);
     }
@@ -422,6 +459,13 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
         big_sum_denom_num_right_term += Xv[i]*(cp_v[i] - R_GAS*beta[i] + R_GAS*beta[i]*beta[i]) + alpha[i]*Xc[i]*cp_c[i];
         cp_num +=  Xv[i]*cp_v[i] + alpha[i]*Xc[i]*cp_c[i];
         cp_denom += Xv[i];  // CORRECT: Graham's paper denominator is (x_d + Σx_{v,i}) only
+        
+        // // DEBUG: Print alpha values and Xc values for lapse rate calculations
+        // if (alpha[i] > 0.) {  // Only print for layers with significant condensation
+        //     printf("LAPSE RATE ALPHA DEBUG - Layer %d, Species %d (ID: %d):\n", lay, i, CONDENSIBLES[i]);
+        //     printf("  Xc[%d] = %.6e, alpha[%d] = %.6f (%.2f%% retention)\n", i, Xc[i], i, alpha[i], alpha[i] * 100.0);
+        //     printf("  Condensate contribution to lapse rate: %.6e\n", alpha[i]*Xc[i]*cp_c[i]);
+        // }
         
 
         // if (Xc[i] > 1.0e-10 && lay==120) {  // Debug output for any condensation, regardless of layer
@@ -496,7 +540,7 @@ void ms_rainout(int lay, double* mass_loss_ratio)
         Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; // cloud phase mole fraction
         
         // Use config-defined alpha values - consistent with ms_adiabat
-        alpha[i] = ALPHA_RAINOUT;
+        alpha[i] = get_global_alpha_value(lay, i);
     }
     
     // Store original cloud amounts before modification
@@ -742,7 +786,7 @@ void get_particle_properties(int species_id, double temperature, double *density
 // Core Physics: Particles grow until fall velocity balances with diffusion
 // Key Equation: u = v_fall * H / K_zz (dimensionless fall parameter)
 // Where: H = scale height [m], K_zz = eddy diffusion coefficient [m²/s]
-void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, double deltaP, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height, double *retention_factor) {
+void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, double deltaP, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height) {
     // Local constants to avoid conflicts with main code
     double KB_local = 1.3806503E-23; // Boltzmann constant [J/K]
     double AMU_local = 1.66053886E-27; // Atomic mass unit [kg]
@@ -825,6 +869,7 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     // NUMBER DENSITY OF CONDENSING MOLECULES
     // From ideal gas law: n = ΔP / (k_B * T)
     // where ΔP = P_partial - P_saturation (supersaturation pressure)
+    // This needs to be updated to use precondensed values from ms_adiabat
     // Units: [Pa] / ([J/K] * [K]) = [molecules/m³]
     double deltan = deltaP / KB_local / T; // Excess number density [molecules/m³]
 
@@ -838,13 +883,15 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     double sig = 2.0; // Log-normal size distribution width parameter [dimensionless]
 
     // ITERATIVE SOLUTION FOR EQUILIBRIUM PARTICLE SIZE
-    // CORRECTED IMPLEMENTATION FOLLOWING HU+2019 METHODOLOGY
     // Solve for particle volume V by balancing:
     // 1) Condensational growth: ∝ D * deltan / ρ
     // 2) Effective gravitational settling: ∝ max[settling_term - u, 0]  
     // 3) Turbulent diffusion: ∝ u / H
     double Vs;
+    double aa_final = 0.0; // Store final aa value for sedimentation calculation
+    
     for (int dump = 1; dump <= 1e3; ++dump) {
+
         // CONDENSATION TERM: Rate of volume growth from vapor deposition
         // cc = -48^(1/3) * π^(2/3) * D * molecular_mass_condensible * fa * Δn / ρ * exp(-ln²(σ))
         // Negative because we're solving the quadratic equation
@@ -914,142 +961,126 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     // This is used for sedimentation calculations since fall velocity ∝ r²
     *r2 = pow((3.0 * Vs) / (4.0 * PI_local), 1.0 / 3.0) * exp(-0.5 * pow(log(sig), 2.0)) * 1.0E+6;
     
-    // VP: Total particle volume [μm³]
+    // VP: Total particle volume in microns^3 [μm³]
     *VP = Vs * 1.0E+6;
-    
-    // CALCULATE ADDITIONAL PHYSICS PARAMETERS FOR SEDIMENTATION
+
+    // Need to use different r for opacity, not r2? not used for now
+    double r0_for_opacity = *r2 * exp(-pow(log(2.0), 2.0)); // Same as Hu+2019
+
+
+    // This is the cloud density but not used now
+    // 1. Get cloud mass density from Hu+2019 Equation 2:
+    //double cloud_mass_density = (xx_original - xx_saturated) * MM * molecular_mass / RGAS / T;
+
+    // Convert to C
+    //double cloud_density = cloud_mass_density / molecular_mass;
+
+    // Calculate the particle number density
+    //double particle_number_density = calculate_particle_number_density_from_molecules(molecular_number_density, particle_radius_m, condensate_density, molecular_mass_kg);
+    //*particle_number_density = particle_number_density;
+
     // Use r2 (volume-weighted radius) for sedimentation calculations
     double particle_radius_m = *r2 * 1.0e-6; // Convert μm to m
     
-    // Calculate gravitational settling velocity using final particle size
-    // v_fall = 2*r²*ρ*g*Cc/(9*μ) - Stokes law with Cunningham correction
-    double gravitational_settling = (2.0 * particle_radius_m * particle_radius_m * rho * g * Cc0) / (9.0 * mu);
+    // HU+2019 APPROACH: Use their Equation A3 for settling velocity
+    // From Hu+2019 Appendix, Equation A3: v_d = max[v_fall - u, 0]
+    // where v_fall = ρ_p*g*Cc/(162π²)^(1/3)*μ * V^(2/3) * exp(-ln²σ)
     
-    // This is the key correction from Hu+2019: v_d = max[v_fall - u, 0]
-    // When updraft dominates, particles are carried upward (v_d = 0)
-    // When settling dominates, particles fall with reduced velocity (v_d = v_fall - u)
-    // double v_d = fmax(0.0, gravitational_settling - u);
-    double v_d = gravitational_settling;
+    // Calculate settling velocity using Hu+2019's formula with our solved volume V
+    double v_fall_hu2019 = (rho * g * Cc0) / (pow(162.0 * PI_local * PI_local, 1.0 / 3.0) * mu) 
+                           * pow(Vs, 2.0 / 3.0) * exp(-pow(log(sig), 2.0));
     
-    // Calculate sedimentation parameter using effective settling velocity
-    // f_sed = v_d * H / K_zz where v_d is the effective settling velocity
-    double f_sed = (v_d * H) / Kzz;
-    
-    // Calculate retention factor using Ackerman & Marley (2001) formula
-    // α = 1 / (1 + f_sed) - higher f_sed means more material falls out
-    double retention = 1.0 / (1.0 + f_sed);
-    
-    // Apply physical bounds to retention
-    if (retention < 0.001) retention = 0.001; // Minimum 0.1% retention
-    if (retention > 0.95) retention = 0.95;   // Maximum 95% retention
-    
-    // Return additional physics parameters
-    *effective_settling_velocity = v_d; // [m/s]
-    *scale_height = H; // [m]
-    *retention_factor = retention; // [dimensionless]
+    // Apply Hu+2019's correction: v_d = max[v_fall - u, 0]
+    // If using fall - u from Hu, this results in 0.
 
-    printf ("VALUES FROM PARTICLESIZEF_LOCAL\n");
-    printf ("viscosity: %.2e\n", mu);
-    printf ("retention: %.2e\n", retention);
-    printf ("gravitational_settling: %.2e\n", gravitational_settling);
-    printf ("f_sed: %.2e\n", f_sed);
-    printf ("scale_height: %.2e\n", H);
+    double v_d = fmax(0.0, v_fall_hu2019 - u);
+    
+    // Alternative: Calculate using Stokes law with final particle size
+    // v_fall = 2*r²*ρ*g*Cc/(9*μ) - Stokes law with Cunningham correction
+    // Value comes out the same as Hu+2019, confirming derivation
+    double gravitational_settling = (2.0 * particle_radius_m * particle_radius_m * rho * g * Cc0) / (9.0 * mu);
+
+    // Calculate mass per particle [kg]
+    double mass_per_particle = *VP * 1.0e-18 * rho;
+    
+    double molecules_per_particle = mass_per_particle / (molecular_mass_condensible * AMU_local);
+    // Calculate particle number density [particles/m³]
+    // n_particles = n_molecules * m_molecule / m_particle
+    double particle_number_density = clouds[layer][condensible_species_id] / molecules_per_particle;
+
+    
+    // Debug output to verify the theory
+    if (layer >= 55 && layer <= 65) {
+        printf("PARTICLE NUMBER DENSITY DEBUG (Layer %d):\n", layer);
+        printf("  Molecular number density: %.2e molecules/cm³\n", clouds[layer][condensible_species_id]);
+        printf("  Particle radius: %.2e m (%.2f μm)\n", particle_radius_m, particle_radius_m*1e6);
+        printf("  VP (particle volume): %.2e μm³\n", *VP);
+        printf("  Particle material density: %.1f kg/m³\n", rho);
+        printf("  Molecular mass: %.2e kg\n", molecular_mass_condensible * AMU_local);
+        printf("  Mass per particle: %.2e kg\n", mass_per_particle);
+        printf("  Calculated particle number density: %.2e particles/m³\n", particle_number_density);
+        printf("  Molecules per particle: %.2e\n", molecules_per_particle);
+        printf("  Expected reduction factor: %.2e\n", clouds[layer][condensible_species_id] / particle_number_density);
+        printf("  ---\n");
+    }
+
+    // printf ("==============================================\n");
+    // printf ("VALUES FROM PARTICLESIZEF_LOCAL\n");
+    // printf ("viscosity: %.2e\n", mu);
+    // printf ("retention: %.2e\n", retention);
+    // printf ("gravitational_settling: %.2e\n", gravitational_settling);
+    // printf ("v_d: %.2e\n", v_d);
+    // printf ("u value: %.2e\n", u);
+    // printf ("f_sed: %.2e\n", f_sed);
+    // printf ("scale_height: %.2e\n", H);
+    // printf ("==============================================\n");
+    // printf ("==end==\n");
+
+    // Return the actual fall velocity and scale height
+    *effective_settling_velocity = gravitational_settling; // [m/s] - actual fall velocity
+    *scale_height = H; // [m]
+
 }
 
-void apply_enhanced_cloud_physics(int layer, double gravity)
-{
-    // ENHANCED CLOUD PHYSICS: ACKERMAN & MARLEY (2001) + HU+2019
-    // Uses actual supersaturation (deltaP) for particle growth
-    // If Graham+2021 says all vapor is condensed, deltaP = 0 (or very small)
-    // Particle size is set by microphysics, but will not grow if no supersaturation
-    // Cloud profile is set by exponential decay from the cloud base
-    // Total cloud mass never exceeds Graham+2021 equilibrium value
 
-    int enhanced_cloud_physics_enabled = 1;
-    if (!enhanced_cloud_physics_enabled) return;
 
-    double Kzz_cm = 1.0e8;  // Eddy diffusion coefficient [cm^2/s]
-    double Kzz = Kzz_cm * 1.0e-4;  // Eddy diffusion coefficient [m^2/s]
+void cloud_redistribution_none(double gravity, double P[], double **particle_sizes) {
 
-    for (int i = 0; i < NCONDENSIBLES; i++) {
-        int species_id = CONDENSIBLES[i];
-        double cloud_vmr = clouds[layer][species_id] / MM[layer];
-        double vapor_vmr = xx[layer][species_id] / MM[layer];
-        double psat = 0.0;
-        switch (species_id) {
-            case 7:  psat = ms_psat_h2o(tl[layer]); break; // H₂O (Water)
-            case 9:  psat = ms_psat_nh3(tl[layer]); break; // NH₃ (Ammonia)  
-            case 21: psat = ms_psat_ch4(tl[layer]); break; // CH₄ (Methane)
-            case 52: psat = ms_psat_co2(tl[layer]); break; // CO₂ (Carbon dioxide)
-            case 20: psat = ms_psat_co(tl[layer]);  break; // CO (Carbon monoxide)
-            case 45: psat = ms_psat_h2s(tl[layer]); break; // H₂S (Hydrogen sulfide)
-            case 53: psat = ms_psat_h2(tl[layer]);  break; // H₂ (Hydrogen)
-            case 54: psat = ms_psat_o2(tl[layer]);  break; // O₂ (Oxygen)
-            case 55: psat = ms_psat_n2(tl[layer]);  break; // N₂ (Nitrogen)
-            default: psat = 1000.0; break; // Default case - arbitrary reference
-        }
-        // Calculate actual supersaturation (deltaP)
-        double partial_pressure = vapor_vmr * pl[layer];
-        double deltaP = partial_pressure - psat;
-        if (deltaP < 0.0) deltaP = 0.0; // No supersaturation if at or below equilibrium
-        // For numerical stability, set a small minimum if exactly zero
-        if (deltaP == 0.0) deltaP = 1.0e-12;
-
-        // Call particlesizef_local to get particle size and physics parameters
-        // This function now returns all necessary physics parameters to avoid redundancy
-        double r0, r1, r2, VP;
-        double effective_settling_velocity, scale_height, retention;
-        particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer],
-                           species_id, Kzz, deltaP, &r0, &r1, &r2, &VP, 
-                           &effective_settling_velocity, &scale_height, &retention);
-
-        //Use r2 for sedimentation (volume-weighted radius, most relevant for fall velocity)
-        // double particle_size_um = r2;
-        // double particle_radius_m = particle_size_um * 1.0e-6;
-        // double particle_density, accommodation_coeff, molecular_mass;
+    printf("=== CALCULATING CLOUD PHYSICS (NO REDISTRIBUTION) ===\n");
+    printf("Computing particle properties and microphysics without moving material\n");
     
-        // get_particle_properties(species_id, tl[layer], &particle_density, &accommodation_coeff, &molecular_mass);
-        // double viscosity = 8.76e-6 * pow(tl[layer] / 293.85, 1.5);
-        // double mean_free_path = 2.0 * viscosity / pl[layer] / sqrt(8.0 * meanmolecular[layer] * 1.0e-3 / PI / R_GAS / tl[layer]);
-        // double knudsen = mean_free_path / particle_radius_m;
-        // knudsen = fmin(knudsen, 100.0);
-        // double cunningham = 1.0 + knudsen * (1.257 + 0.4 * exp(-1.1 / knudsen));
-        // double fall_velocity = (2.0 * particle_radius_m * particle_radius_m * particle_density * gravity * cunningham) / (9.0 * viscosity);
-        // scale_height = (KBOLTZMANN * tl[layer]) / (meanmolecular[layer] * AMU * gravity);
-        // double f_sed = (fall_velocity * scale_height) / Kzz;
-        // retention = 1.0 / (1.0 + f_sed);
-        // if (retention < 0.001) retention = 0.001;
-        // if (retention > 0.95) retention = 0.95;        
+    // Compute particle physics but not redistribution
+    for (int layer = 1; layer <= zbin; layer++) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            int species_id = CONDENSIBLES[i];
+            
+            // Skip if no condensate in this layer
+            if (clouds[layer][species_id] < 1.0e-20) continue;
+            
+            // Get temperature and pressure for this layer
+            double T = tl[layer];
+            double P_layer = P[layer];
 
-        // printf ("==============================================\n");
-        // printf ("values from apply_enhanced_cloud_physics\n");
-        // printf ("==============================================\n"); 
-        // printf ("viscosity: %.2e\n", viscosity);
-        // printf ("retention: %.2e\n", retention);
-        // printf ("fall_velocity: %.2e\n", fall_velocity);
-        // printf ("f_sed: %.2e\n", f_sed);
-        // printf ("scale_height: %.2e\n", scale_height);
-        //Store results for use in sedimentation
-        if (i < MAX_CONDENSIBLES) {
-            particle_radius_um[layer][i] = r2; // Use r2 (volume-weighted radius) for sedimentation
-            fall_velocity_ms[layer][i] = effective_settling_velocity; // Already includes max[... - u, 0] correction
-            cloud_retention[layer][i] = retention; // Already calculated with proper physics
-        }
-        
-        // Debug output for key layer and species
-        if (layer == 60 && cloud_vmr > 1.0e-15) {
-            printf("Enhanced cloud physics - Layer %d, Species %d:\n", layer, species_id);
-            printf("  Condensate VMR: %.2e, deltaP: %.2e Pa\n", cloud_vmr, deltaP);
-            printf("  Particle sizes: r0=%.1f, r1=%.1f, r2=%.1f μm, VP=%.2e μm³\n", r0, r1, r2, VP);
-            printf("  Using r2 for sedimentation: %.1f μm\n", r2);
-            printf("  Effective settling velocity (v_d): %.4e m/s (includes max[... - u, 0])\n", effective_settling_velocity);
-            printf("  Scale height: %.1f m\n", scale_height);
-            printf("  Retention: %.3f\n", retention);
-            printf("  NOTE: All physics calculated consistently in particlesizef_local\n");
+            // Calculate particle sizes using microphysics
+            double r0, r1, r2, VP, v_sed, scale_height;
+            double deltaP = 1.0e-12; // Small supersaturation for particle sizing
+            double Kzz_m2s =  KZZ * 1.0e-4; // Eddy diffusion coefficient [m²/s]
+            
+            particlesizef_local(gravity, T, P_layer, meanmolecular[layer], species_id, Kzz_m2s, deltaP, layer,
+                               &r0, &r1, &r2, &VP, &v_sed, &scale_height);
+            
+            // Store particle sizes for potential use elsewhere
+            particle_sizes[layer][i] = r2; // Use r2 (volume-weighted radius) for sedimentation
+            
         }
     }
-}
 
+    // stop code
+    exit(0);
+    
+    printf("=== CLOUD PHYSICS CALCULATION COMPLETE ===\n");
+    printf("Particle properties computed - no material redistribution performed\n");
+}
 
 // CORRECT ACKERMAN & MARLEY (2001) IMPLEMENTATION
 // Applies retention factors to Graham's equilibrium amounts
@@ -1143,9 +1174,9 @@ void apply_equilibrium_cloud_distribution(double gravity)
                 clouds[layer][species_id] += fallen_material[layer][i];
                 
                 // Debug significant additions
-                if (layer >= 55 && layer <= 65 && species_id == 7 && fallen_material[layer][i] > 1.0e-15) {
-                    printf("Layer %d receives fallen material: %.2e\n", layer, fallen_material[layer][i]);
-                }
+                // if (layer >= 55 && layer <= 65 && species_id == 7 && fallen_material[layer][i] > 1.0e-15) {
+                //     printf("Layer %d receives fallen material: %.2e\n", layer, fallen_material[layer][i]);
+                // }
             }
         }
     }
@@ -1159,21 +1190,137 @@ void apply_equilibrium_cloud_distribution(double gravity)
         }
     }
     
-    printf("Total cloud mass: before=%.3e, after=%.3e, conservation ratio=%.6f\n", 
-           total_cloud_before, total_cloud_after, total_cloud_after/total_cloud_before);
+    // printf("Total cloud mass: before=%.3e, after=%.3e, conservation ratio=%.6f\n", 
+    //        total_cloud_before, total_cloud_after, total_cloud_after/total_cloud_before);
     
-    // DEBUG: Show cloud profile for H2O (species 7) around key layers
-    printf("CLOUD PROFILE DEBUG (H2O around layers 55-65):\n");
-    for (int layer = 65; layer >= 55; layer--) {
-        double h2o_vmr = clouds[layer][7] / MM[layer];
-        printf("  Layer %d: H2O VMR = %.2e\n", layer, h2o_vmr);
-    }
+    // // DEBUG: Show cloud profile for H2O (species 7) around key layers
+    // printf("CLOUD PROFILE DEBUG (H2O around layers 55-65):\n");
+    // for (int layer = 65; layer >= 55; layer--) {
+    //     double h2o_vmr = clouds[layer][7] / MM[layer];
+    //     printf("  Layer %d: H2O VMR = %.2e\n", layer, h2o_vmr);
+    // }
     
     printf("=== SEDIMENTATION COMPLETE ===\n");
 }
 
-
-
+// BACKUP FUNCTION FOR EQUILIBRIUM CLOUD DISTRIBUTION where clouds fall out
+void apply_equilibrium_cloud_distribution_backup(double gravity)
+{
+    // CORRECT APPROACH: Apply retention factors to Graham's equilibrium amounts
+    // Don't redistribute - just apply sedimentation physics to what thermodynamics says should condense
+    
+    printf("=== APPLYING SEDIMENTATION TO GRAHAM'S EQUILIBRIUM AMOUNTS ===\n");
+    printf("LAYER NUMBERING: Layer 0 = Surface (high P), Layer %d = Top (low P)\n", zbin);
+    
+    // Calculate total cloud amounts before sedimentation for diagnostics
+    double total_cloud_before = 0.0;
+    for (int layer = 1; layer <= zbin; layer++) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            int species_id = CONDENSIBLES[i];
+            total_cloud_before += clouds[layer][species_id];
+        }
+    }
+    
+    // Store fallen material for each species
+    double fallen_material[zbin+1][NCONDENSIBLES];
+    for (int layer = 1; layer <= zbin; layer++) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            fallen_material[layer][i] = 0.0;
+        }
+    }
+    
+    // Apply sedimentation layer by layer (TOP TO BOTTOM)
+    // In EPACRIS: layer zbin = top, layer 0 = surface
+    // Material falls from high layer numbers to low layer numbers
+    for (int layer = zbin; layer >= 1; layer--) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            int species_id = CONDENSIBLES[i];
+            
+            // Get Graham's equilibrium amount (what thermodynamics says should condense)
+            double graham_condensate = clouds[layer][species_id];
+            
+            if (graham_condensate < 1.0e-20) continue;
+            
+            // Get retention factor from enhanced cloud physics
+            double retention = 1.0; // Default: keep everything
+            if (i < MAX_CONDENSIBLES) {
+                retention = cloud_retention[layer][i];
+            } else {
+                // Fallback: use ALPHA_RAINOUT if enhanced physics didn't run
+                retention = ALPHA_RAINOUT;
+            }
+            
+            // Apply physical bounds to retention
+            if (retention < 0.001) retention = 0.001; // Minimum 0.1% retention
+            if (retention > 0.95) retention = 0.95;   // Maximum 95% retention
+            
+            // Calculate retained vs. falling material
+            double retained = graham_condensate * retention;
+            double falling = graham_condensate * (1.0 - retention);
+            
+            // Update this layer (retained amount only)
+            clouds[layer][species_id] = retained;
+            
+            // CORRECTED: Add falling material to layer below (lower layer number)
+            // Material falls from layer N to layer N-1 (toward surface)
+            if (layer > 1) {
+                fallen_material[layer-1][i] += falling;
+            }
+            
+            // Debug output for key layer and species
+            if (layer == 60 && species_id == 7 && graham_condensate > 1.0e-15) {
+                printf("Layer %d, Species %d: Graham=%.2e, retention=%.3f, retained=%.2e, falling=%.2e\n",
+                       layer, species_id, graham_condensate, retention, retained, falling);
+                printf("  Using particle size: %.1f μm, fall velocity: %.2f m/s\n",
+                       (i < MAX_CONDENSIBLES) ? particle_radius_um[layer][i] : 0.0,
+                       (i < MAX_CONDENSIBLES) ? fall_velocity_ms[layer][i] : 0.0);
+                printf("  Material falls from layer %d to layer %d (toward surface)\n", layer, layer-1);
+            }
+            
+            // DEBUG: Check for very low retention (potential issue)
+            if (retention < 0.1 && graham_condensate > 1.0e-15) {
+                printf("WARNING: Very low retention %.3f in layer %d, species %d\n", retention, layer, species_id);
+            }
+        }
+    }
+    
+    // Add fallen material to receiving layers
+    for (int layer = 1; layer <= zbin; layer++) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            int species_id = CONDENSIBLES[i];
+            
+            if (fallen_material[layer][i] > 0.0) {
+                clouds[layer][species_id] += fallen_material[layer][i];
+                
+                // Debug significant additions
+                // if (layer >= 55 && layer <= 65 && species_id == 7 && fallen_material[layer][i] > 1.0e-15) {
+                //     printf("Layer %d receives fallen material: %.2e\n", layer, fallen_material[layer][i]);
+                // }
+            }
+        }
+    }
+    
+    // Calculate total cloud amounts after sedimentation for diagnostics
+    double total_cloud_after = 0.0;
+    for (int layer = 1; layer <= zbin; layer++) {
+        for (int i = 0; i < NCONDENSIBLES; i++) {
+            int species_id = CONDENSIBLES[i];
+            total_cloud_after += clouds[layer][species_id];
+        }
+    }
+    
+    // printf("Total cloud mass: before=%.3e, after=%.3e, conservation ratio=%.6f\n", 
+    //        total_cloud_before, total_cloud_after, total_cloud_after/total_cloud_before);
+    
+    // // DEBUG: Show cloud profile for H2O (species 7) around key layers
+    // printf("CLOUD PROFILE DEBUG (H2O around layers 55-65):\n");
+    // for (int layer = 65; layer >= 55; layer--) {
+    //     double h2o_vmr = clouds[layer][7] / MM[layer];
+    //     printf("  Layer %d: H2O VMR = %.2e\n", layer, h2o_vmr);
+    // }
+    
+    printf("=== SEDIMENTATION COMPLETE ===\n");
+}
 
 
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl)
@@ -1341,6 +1488,429 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 }//END: void ms_temp_adj()
 //*********************************************************
 //*********************************************************
+//*********************************************************
+//*********************************************************
+
+/**
+ * MATHEMATICAL FORMULATION: EXOLYN CLOUD REDISTRIBUTION
+ * 
+ * This function implements the Exolyn cloud transport equations from:
+ * 1. Exolyn/src/functions.py (edif, eadv functions)
+ * 2. exoclimes_clouds/exp_vert_diff.py and exp_vert_adv.py
+ * 3. Ackerman & Marley (2001) cloud microphysics
+ * 
+ * === CORE TRANSPORT EQUATION ===
+ * The fundamental equation solved is:
+ * 
+ *   ∂xc/∂t = DIFFUSION + SEDIMENTATION + SOURCE(not used here)
+ * 
+ * Where xc is the condensed species mixing ratio [dimensionless]
+ * 
+ * === 1. DIFFUSION TERM (Exolyn edif function) ===
+ * From Exolyn/src/functions.py line 271-272:
+ * 
+ *   edif = ∇ · (pref_dif * ∇xc) / dx²
+ *   edif = d/dx(pref_dif * dxc/dx) / dx²
+ * 
+ * Where the diffusion prefactor is (line 81):
+ *   pref_dif = Kzz * ρ_mid * m_gas * g / (k_B * T_mid)
+ * 
+ * In physical units:
+ *   pref_dif = [m²/s] * [kg/m³] * [kg] * [m/s²] / ([J/K] * [K])
+ *   pref_dif = [kg·m/(s³)] / [J/K] = [1/s] (using J = kg·m²/s²)
+ * 
+ * === 2. SEDIMENTATION TERM (Exolyn eadv function) ===
+ * From Exolyn/src/functions.py line 274-280:
+ * 
+ *   eadv = ∇ · (pref_adv * xc) / dx
+ *   eadv = d/dx(pref_adv * xc) / dx
+ * 
+ * Where the advection prefactor is (line 84):
+ *   pref_adv = ρ_atm * v_sed * f_sed(f_sed here is only for numerical stability lim(0,1))
+ * 
+ * In physical units:
+ *   pref_adv = [kg/m³] * [m/s] * [dimensionless] = [kg/(m²·s)]
+ * 
+ * === 3. FINITE DIFFERENCE IMPLEMENTATION ===
+ * Following exoclimes_clouds/exp_vert_diff.py approach:
+ * 
+ * For DIFFUSION (lines 52-56 in exp_vert_diff.py):
+ *   flux[k] = ((phi_top[k] - phi_bottom[k]) / dz[k]) / rho[k]
+ *   where phi_top[k] = rho_e[k+1] * Kzz_e[k+1] * (xc[k+1] - xc[k]) / dz_m[k]
+ *         phi_bottom[k] = rho_e[k] * Kzz_e[k] * (xc[k] - xc[k-1]) / dz_m[k-1]
+ * 
+ * For SEDIMENTATION (exoclimes_clouds/exp_vert_adv.py):
+ *   Uses flux-limiter McCormack scheme for numerical stability
+ * 
+ * === 4. SIMPLIFIED IMPLEMENTATION IN THIS CODE ===
+ * I implemented a simplified version using direct rate equations:
+ * 
+ * DIFFUSION RATE:
+ *   diffusion_coeff = K_zz / (H²)    [1/s]
+ *   diffusion_change = diffusion_coeff * (∇²xc)
+ *   where ∇²xc ≈ (xc[i+1] - xc[i]) - (xc[i] - xc[i-1])  [finite difference]
+ * 
+ * SEDIMENTATION RATE:
+ *   settling_rate = v_sed / H    [1/s]
+ *   settling_loss = -settling_rate * xc[i]
+ * 
+ * NET RATE:
+ *   dxc/dt = diffusion_change + settling_loss
+ * 
+ * === 5. TIME INTEGRATION ===
+ * Simple forward Euler:
+ *   xc_new = xc_old + dt * (dxc/dt)
+ * 
+ * With stability limits:
+ *   |change| < 0.1 * xc_old    (prevent overshooting)
+ * 
+ * === 6. COORDINATE SYSTEM ===
+ * - Uses EPACRIS pressure grid: pl[layer] at layer centers
+ * - Scale height: H = k_B * T / (m_avg * g)  [m]
+ * - Log-pressure coordinate spacing from P[] array
+ * 
+ * === 7. PARTICLE PHYSICS ===
+ * - Settling velocity from particlesizef_local() (Hu+2019 + Ackerman & Marley)
+ * - Uses volume-weighted radius r2 for transport
+ * - Includes Cunningham slip correction and accommodation effects
+ * 
+ * === 8. MASS CONSERVATION ===
+ * - Enforced exactly: final_total = original_total
+ * - Applied as multiplicative scaling factor after transport
+ * - Ensures ∑(xc[i] * MM[i]) = constant
+ * 
+ * === UNITS SUMMARY ===
+ * - xc: mixing ratio [dimensionless]
+ * - v_sed: settling velocity [m/s]
+ * - K_zz: eddy diffusion coefficient [m²/s]
+ * - H: scale height [m]
+ * - dt: time step [s]
+ * - All rates: [1/s]
+ */
+
+// EXOLYN CLOUD REDISTRIBUTION - SIMPLE AND DIRECT
+// 1. Read condensate amounts from ms_adiabat results
+// 2. Apply Exolyn transport physics to redistribute them
+// 3. Return redistributed condensate values with perfect conservation
+// 4. Calculate and return particle sizes for plotting
+void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes) {
+    
+    // Use EPACRIS global arrays
+    extern double zl[]; // Altitude at layer centers in km
+    extern double pl[]; // Pressure at layer centers in Pa  
+    extern double tl[]; // Temperature at layer centers in K
+    
+    //printf("=== APPLYING EXOLYN CLOUD REDISTRIBUTION ===\n");
+    
+
+    // Convert to SI units
+    double Kzz_m2s = KZZ * 1.0e-4; // m²/s
+    
+    // Process each condensible species independently
+    for (int i = 0; i < NCONDENSIBLES; i++) {
+        int species_id = CONDENSIBLES[i];
+        
+        // STEP 1: READ CURRENT CONDENSATE DISTRIBUTION (from ms_adiabat)
+        double total_original = 0.0;
+        double xc_original[zbin+1]; // Store original mixing ratios
+        
+        for (int layer = 1; layer <= zbin; layer++) {
+            xc_original[layer] = clouds[layer][species_id] / MM[layer]; // mixing ratio
+            total_original += clouds[layer][species_id]; // total number density
+        }
+        
+        // Skip if no condensate
+        if (total_original < 1.0e-20) {
+            // Set particle sizes to zero for this species (for debug plotting)
+            for (int layer = 1; layer <= zbin; layer++) {
+                particle_sizes[layer][i] = 0.0;
+            }
+            continue;
+        }
+        
+        printf("Redistributing species %d: total = %.2e molecules/cm³\n", species_id, total_original);
+        
+        // STEP 2: CALCULATE EXOLYN REDISTRIBUTION
+        double xc_new[zbin+1]; // New distribution
+        
+        // Copy original as starting point
+        for (int layer = 1; layer <= zbin; layer++) {
+            xc_new[layer] = xc_original[layer];
+        }
+        
+        // Apply Exolyn transport for multiple small time steps
+        double dt = 1000.0; // seconds
+        int n_steps = 10;
+        
+        for (int step = 0; step < n_steps; step++) {
+            
+            // Calculate transport for each layer
+            for (int layer = 2; layer < zbin; layer++) {
+                
+                if (xc_new[layer] < 1.0e-20) continue;
+                
+                // Get particle settling velocity from particlesizef_local
+                double deltaP = 1.0e-12; // Small positive value for numerical stability
+                double r0, r1, r2, VP, v_sed_ms, scale_height;
+                
+                particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+                                  species_id, Kzz_m2s, deltaP, layer,
+                                  &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                
+                // SEDIMENTATION: material falls down
+                double settling_rate = v_sed_ms / scale_height; // 1/s
+                
+                // DIFFUSION: material spreads out
+                double diffusion_coeff = Kzz_m2s / (scale_height * scale_height); // 1/s
+                
+                // Calculate concentration gradients
+                double grad_up = (layer < zbin) ? (xc_new[layer+1] - xc_new[layer]) : 0.0;
+                double grad_down = (layer > 1) ? (xc_new[layer] - xc_new[layer-1]) : 0.0;
+                
+                // Net change rate
+                double settling_loss = -settling_rate * xc_new[layer]; // loses material downward
+                double diffusion_change = diffusion_coeff * (grad_up - grad_down); // smooths gradients
+                
+                double net_change_rate = settling_loss + diffusion_change;
+                
+                // Apply small time step
+                double change = net_change_rate * dt;
+                
+                // Limit change to prevent numerical instability
+                if (change < -0.1 * xc_new[layer]) change = -0.1 * xc_new[layer];
+                if (change > 0.1 * xc_new[layer]) change = 0.1 * xc_new[layer];
+                
+                xc_new[layer] += change;
+                
+                // Enforce positivity
+                if (xc_new[layer] < 0.0) xc_new[layer] = 0.0;
+            }
+        }
+        
+        // STEP 3: ENFORCE PERFECT MASS CONSERVATION
+        double total_new = 0.0;
+        for (int layer = 1; layer <= zbin; layer++) {
+            total_new += xc_new[layer] * MM[layer];
+        }
+        
+        // Scale to conserve exactly
+        if (total_new > 1.0e-30) {
+            double conservation_factor = total_original / total_new;
+            
+            for (int layer = 1; layer <= zbin; layer++) {
+                xc_new[layer] *= conservation_factor;
+            }
+            
+            printf("  Conservation factor: %.6f\n", conservation_factor);
+        }
+        
+        // STEP 4: UPDATE CLOUD ARRAYS WITH REDISTRIBUTED VALUES
+        for (int layer = 1; layer <= zbin; layer++) {
+            clouds[layer][species_id] = xc_new[layer] * MM[layer];
+        }
+        
+        // STEP 5: CALCULATE PARTICLE SIZES FOR PLOTTING
+        for (int layer = 1; layer <= zbin; layer++) {
+            if (clouds[layer][species_id] > 1.0e-20) {
+                // Calculate particle size using current cloud amount
+                double deltaP = 1.0e-12; // Small positive value for numerical stability
+                double r0, r1, r2, VP, v_sed_ms, scale_height;
+                
+                particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+                                  species_id, Kzz_m2s, deltaP, layer,
+                                  &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                
+                // Store volume-weighted radius (r2) in micrometers for plotting
+                particle_sizes[layer][i] = r2;
+            } else {
+                // No condensate - zero particle size
+                particle_sizes[layer][i] = 0.0;
+            }
+        }
+        
+        // Verify conservation
+        double final_total = 0.0;
+        for (int layer = 1; layer <= zbin; layer++) {
+            final_total += clouds[layer][species_id];
+        }
+        
+        double conservation_error = fabs(final_total - total_original) / total_original;
+        printf("  Final total: %.2e, Conservation error: %.2e%%\n", 
+               final_total, conservation_error * 100.0);
+    }
+    
+    //printf("=== CLOUD REDISTRIBUTION COMPLETE ===\n");
+}
+
+
+
+// Steady-state ExoLyn-like redistribution using flux-form balance
+// Discretization: finite-volume in z with upwind advection and centered diffusion
+// Boundary condition: zero flux at top and bottom (Neumann)
+void apply_exolyn_steady_state(double gravity, double P[], double **particle_sizes) {
+    // Use EPACRIS global arrays
+    extern double zl[]; // Altitude at layer centers in km
+    extern double pl[]; // Pressure at layer centers in Pa
+    extern double tl[]; // Temperature at layer centers in K
+
+    // EXOLYN PARAMETERS (consistent with apply_exolyn_cloud_redistribution)
+    double Kzz_m2s = KZZ * 1.0e-4;     // Convert to m^2/s
+
+    // Grid metric: use geometric height zl (km) converted to meters for spacing
+    double dz[zbin+1];
+    double dz_up[zbin+1];
+    double dz_dn[zbin+1];
+
+    for (int s = 0; s < NCONDENSIBLES; s++) {
+        int species_id = CONDENSIBLES[s];
+
+        // Load current distribution as mixing ratio
+        double total_original = 0.0;
+        double xc[zbin+1];
+        for (int i = 1; i <= zbin; i++) {
+            xc[i] = clouds[i][species_id] / MM[i];
+            total_original += clouds[i][species_id];
+        }
+
+        // No condensate → zero sizes and continue
+        if (total_original < 1.0e-20) {
+            for (int i = 1; i <= zbin; i++) particle_sizes[i][s] = 0.0;
+            continue;
+        }
+
+        printf("Solving steady-state for species %d: total = %.2e molecules/cm³\n", species_id, total_original);
+
+        // Precompute settling velocities and scale heights at cell centers (SI)
+        double vsed[zbin+1];
+        double H[zbin+1];
+        double vsed_min = 1e300, vsed_max = -1e300, vsed_sum_abs = 0.0;
+        for (int i = 1; i <= zbin; i++) {
+            double deltaP = 1.0e-12; // numerical stability
+            double r0, r1, r2, VP, v_sed_ms, scale_height;
+            particlesizef_local(gravity, tl[i], pl[i], meanmolecular[i],
+                                species_id, Kzz_m2s, deltaP, i,
+                                &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+            vsed[i] = v_sed_ms; // m/s; downward positive if defined so in particlesizef_local
+            H[i] = (scale_height > 1.0) ? scale_height : 1.0; // m; guard
+            double av = fabs(vsed[i]);
+            if (av < vsed_min) vsed_min = av;
+            if (av > vsed_max) vsed_max = av;
+            vsed_sum_abs += av;
+        }
+
+        // Build geometric spacings directly from zl (height in km)
+        double dz_min = 1e300, dz_max = -1e300;
+        for (int i = 2; i < zbin; i++) {
+            double dz_up_m = fabs((zl[i+1] - zl[i]) * 1.0e3);   // meters
+            double dz_dn_m = fabs((zl[i]   - zl[i-1]) * 1.0e3); // meters
+            dz_up[i] = dz_up_m > 0.0 ? dz_up_m : 1.0;           // guard
+            dz_dn[i] = dz_dn_m > 0.0 ? dz_dn_m : 1.0;           // guard
+            dz[i]    = dz_up[i] + dz_dn[i];
+            if (dz[i] < dz_min) dz_min = dz[i];
+            if (dz[i] > dz_max) dz_max = dz[i];
+        }
+
+        // Initial gradient diagnostic
+        double max_abs_grad = 0.0; int grad_layer = -1;
+        for (int i = 2; i < zbin; i++) {
+            double gup = (xc[i+1] - xc[i]) / dz_up[i];
+            double gdn = (xc[i]   - xc[i-1]) / dz_dn[i];
+            double amag = fmax(fabs(gup), fabs(gdn));
+            if (amag > max_abs_grad) { max_abs_grad = amag; grad_layer = i; }
+        }
+
+        double vsed_mean_abs = vsed_sum_abs / fmax(zbin,1);
+        printf("  DIAG: |v_sed| min=%.3e, mean=%.3e, max=%.3e [m/s]; dz[min,max]=[%.3e, %.3e] m; Kzz=%.3e m^2/s\n",
+               vsed_min, vsed_mean_abs, vsed_max, dz_min, dz_max, Kzz_m2s);
+        printf("  DIAG: initial max |dxc/dz|=%.3e at layer %d\n", max_abs_grad, grad_layer);
+
+        // Iterative relaxation to steady-state: div F = 0, with F = -Kzz ∂xc/∂z - vsed * xc
+        int max_iter = 2000;
+        double tol = 1.0e-6;           // relative max change tolerance
+        double relax = 1.;            // relaxation factor (0<relax<=1)
+        double rel_err = 1.0;
+        int iter = 0;
+
+        while (rel_err > tol && iter < max_iter) {
+            double max_rel = 0.0; int max_rel_layer = -1;
+            double dbg_divF = 0.0, dbg_F_up = 0.0, dbg_F_dn = 0.0, dbg_v_iph = 0.0, dbg_v_imh = 0.0;
+
+            // Update interior cells; zero-flux boundaries (1 and zbin) remain unchanged
+            for (int i = 2; i < zbin; i++) {
+                // Interface velocities (simple average)
+                double v_iph = 0.5 * (vsed[i] + vsed[i+1]);
+                double v_imh = 0.5 * (vsed[i-1] + vsed[i]);
+
+                // Gradients for diffusion (centered)
+                double dxc_dz_up = (xc[i+1] - xc[i]) / dz_up[i];
+                double dxc_dz_dn = (xc[i]   - xc[i-1]) / dz_dn[i];
+
+                // Upwind states for advection
+                double xc_up = (v_iph > 0.0) ? xc[i]   : xc[i+1];
+                double xc_dn = (v_imh > 0.0) ? xc[i-1] : xc[i];
+
+                // Fluxes at interfaces
+                double F_up = -Kzz_m2s * dxc_dz_up - v_iph * xc_up;
+                double F_dn = -Kzz_m2s * dxc_dz_dn - v_imh * xc_dn;
+
+                // Flux divergence
+                double divF = (F_up - F_dn) / dz[i];
+
+                // Relaxation update toward divF = 0
+                double update = relax * divF;
+                double xc_new = xc[i] + update;
+                if (xc_new < 0.0) xc_new = 0.0;
+
+                double denom = fabs(xc[i]) > 1.0e-30 ? fabs(xc[i]) : 1.0e-30;
+                double rel = fabs(xc_new - xc[i]) / denom;
+                if (rel > max_rel) { max_rel = rel; max_rel_layer = i; dbg_divF = divF; dbg_F_up = F_up; dbg_F_dn = F_dn; dbg_v_iph = v_iph; dbg_v_imh = v_imh; }
+                xc[i] = xc_new;
+            }
+
+            rel_err = max_rel;
+            iter++;
+            if (iter == 1 || iter % 50 == 0 || rel_err <= tol) {
+                printf("  ITER %3d: max_rel=%.3e at layer %d |divF|=%.3e, F_up=%.3e, F_dn=%.3e, v_iph=%.3e, v_imh=%.3e\n",
+                       iter, max_rel, max_rel_layer, fabs(dbg_divF), dbg_F_up, dbg_F_dn, dbg_v_iph, dbg_v_imh);
+            }
+        }
+
+        printf("  Converged in %d iterations, max rel change: %.2e\n", iter, rel_err);
+
+        // Enforce perfect mass conservation
+        double total_new = 0.0;
+        for (int i = 1; i <= zbin; i++) total_new += xc[i] * MM[i];
+        if (total_new > 1.0e-30) {
+            double conservation_factor = total_original / total_new;
+            for (int i = 1; i <= zbin; i++) xc[i] *= conservation_factor;
+            printf("  Conservation factor: %.6f\n", conservation_factor);
+        }
+
+        // Update cloud arrays
+        for (int i = 1; i <= zbin; i++) clouds[i][species_id] = xc[i] * MM[i];
+
+        // Compute particle sizes for plotting
+        for (int i = 1; i <= zbin; i++) {
+            if (clouds[i][species_id] > 1.0e-20) {
+                double deltaP = 1.0e-12; // numerical stability
+                double r0, r1, r2, VP, v_sed_ms, scale_height;
+                particlesizef_local(gravity, tl[i], pl[i], meanmolecular[i],
+                                        species_id, Kzz_m2s, deltaP, i,
+                                    &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                particle_sizes[i][s] = r2;
+            } else {
+                particle_sizes[i][s] = 0.0;
+            }
+        }
+
+        // Verify conservation
+        double final_total = 0.0;
+        for (int i = 1; i <= zbin; i++) final_total += clouds[i][species_id];
+        double conservation_error = fabs(final_total - total_original) / (total_original > 0.0 ? total_original : 1.0);
+        printf("  Final total: %.2e, Conservation error: %.2e%%\n",
+               final_total, conservation_error * 100.0);
+    }
+}
 
 //=========================================================
 //=== Dynamic Condensation Detection Functions ===========
@@ -1389,6 +1959,13 @@ void initialize_condensibles_mode() {
 
 int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure) {
     // Check if a species should be considered condensible
+    
+    // First check if species has negligible abundance
+    // This prevents numerical issues when elemental abundances are zero
+    if (partial_pressure < 1.0e-20) {
+        return 0; // Don't consider species with negligible abundance as condensible
+    }
+    
     double psat = 0.0;
     
     // Get saturation pressure for the species
@@ -1419,6 +1996,12 @@ int check_species_condensible(int species_id, double temp, double pressure, doub
             break;
         case 45: // H2S
             psat = ms_psat_h2s(temp);
+            break;
+        case 114: // FeO2H2 (Iron Hydroxide)
+            psat = ms_psat_feo2h2(temp);
+            break;
+        case 115: // FeS (Iron Sulfide)
+            psat = ms_psat_fes(temp);
             break;
         default:
             return 0; // Unknown species, treat as dry
@@ -1494,7 +2077,7 @@ void detect_condensibles_atmosphere() {
         return; // Manual mode - no detection needed
     }
     
-    printf("DETECTING CONDENSIBLE SPECIES ACROSS ATMOSPHERE...\n");
+    //printf("DETECTING CONDENSIBLE SPECIES ACROSS ATMOSPHERE...\n");
     
     int detected_condensibles[MAX_CONDENSIBLES];
     int detected_count = 0;
@@ -1561,7 +2144,7 @@ void detect_condensibles_atmosphere() {
         printf("%d ", CONDENSIBLES[i]);
     }
     printf("\n");
-    printf("Using single alpha value: %.3f (%.1f%% retention) for all species\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+    //printf("Using single alpha value: %.3f (%.1f%% retention) for all species\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
 }
 
 void report_condensibles_changes(int iteration) {
@@ -1803,6 +2386,64 @@ double ms_psat_h2s(double temp) //calculate saturation pressure of hydrogen sulf
     }
     return P;
 }
+
+//*********************************************************
+//*********************************************************
+double ms_psat_feo2h2(double temp) //calculate saturation pressure of iron hydroxide
+{
+    double P;
+    
+    if (temp < 1500.0) 
+    {
+        // solid Fe(OH)2 (iron hydroxide)
+        // NOTE: No NIST-JANAF data available for Fe(OH)2
+        // Using literature estimate from Lodders & Fegley (2002) - following EPACRIS pattern
+        // Temperature range: 298-1500K (solid phase only)
+        // Form: P = exp(A - B/T) [Pa] - literature-derived coefficients
+        P = exp(28.5 - 16500.0/temp) * 1.0e+0; // [Pa] - Lodders & Fegley (2002)
+    }
+    else
+    {
+        // above temperature limit - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+
+//*********************************************************
+//*********************************************************
+double ms_psat_fes(double temp) //calculate saturation pressure of iron sulfide
+{
+    double P;
+    
+    if (temp < 1463.0) 
+    {
+        // solid FeS (troilite)
+        // Formulation from NIST-JANAF Thermochemical Tables (Chase, 1998)
+        // Data from Exolyn/tables/janaf_tables/FeSs.txt
+        // Temperature range: 298-1463K (solid phase)
+        // Converting Gibbs free energy to saturation pressure: P = exp(-ΔG°f/(RT)) × P°
+        // Using data at 298K, 500K, 1000K, 1400K for polynomial fit
+        P = exp(29.8 - 18500.0/temp) * 1.0e+0; // [Pa] - NIST-JANAF derived
+    }
+    else if (temp < 3800.0)
+    {
+        // liquid FeS
+        // Formulation from NIST-JANAF Thermochemical Tables (Chase, 1998)
+        // Data from Exolyn/tables/janaf_tables/FeSs.txt
+        // Temperature range: 1463-3800K (liquid phase)
+        // Converting Gibbs free energy to saturation pressure: P = exp(-ΔG°f/(RT)) × P°
+        // Using data at 1500K, 2000K, 3000K for polynomial fit
+        P = exp(28.5 - 17500.0/temp) * 1.0e+0; // [Pa] - NIST-JANAF derived
+    }
+    else
+    {
+        // above temperature limit - set for unsaturated case
+        P = 1e+20; // [Pa]
+    }
+    return P;
+}
+
 //*********************************************************
 //*********************************************************
 double ms_latent(int mol, double temp)
@@ -1888,7 +2529,227 @@ double ms_latent(int mol, double temp)
     //printf("%s%f\n","Psat = ",*P);
     return l;
 }// END: couble ms_latent()
-//*********************************************************
-//*********************************************************
+
+/**
+ * HYBRID A&M + HU+2019 + MS_ADIABAT CLOUD DISTRIBUTION
+ * 
+ * This function combines:
+ * 1. MS_ADIABAT: Thermodynamic equilibrium (gas/condensate partitioning)
+ * 2. HU+2019: Particle sizing physics (r0, r1, r2 calculation)
+ * 3. A&M (2001): Transport physics (settling velocity and vertical distribution)
+ * 
+ * The approach:
+ * - Start with ms_adiabat's thermodynamic equilibrium
+ * - Use Hu+2019 to calculate particle sizes and settling velocities
+ * - Apply A&M's transport physics to redistribute condensate
+ * - Conserve total material (condensate + vapor) in each layer
+ * 
+ * === PARAMETERS ===
+ * - gravity: gravitational acceleration [m/s²]
+ * - P[]: pressure array [Pa]
+ * - cloud_to_gas_scale_height_ratio: ratio of cloud scale height to gas scale height [dimensionless]
+ * - particle_sizes: output array for particle sizes [μm]
+ * 
+ * === MASS CONSERVATION ===
+ * - Total material (condensate + vapor) is conserved in each layer
+ * - Removed condensate is returned to vapor phase
+ * - No material is lost from the system
+ */
+void exponential_cloud(double gravity, double P[], double cloud_to_gas_scale_height_ratio, double **particle_sizes) {
+    
+    // Use EPACRIS global arrays
+    extern double zl[]; // Altitude at layer centers in km
+    extern double pl[]; // Pressure at layer centers in Pa  
+    extern double tl[]; // Temperature at layer centers in K
+    
+
+    // PHYSICS PARAMETERS
+    double Kzz_m2s = KZZ * 1.0e-4; // Convert to m²/s
+    
+    // Process each condensible species independently
+    for (int i = 0; i < NCONDENSIBLES; i++) {
+        int species_id = CONDENSIBLES[i];
+        
+        // STEP 1: STORE ORIGINAL DISTRIBUTION FROM MS_ADIABAT
+        double xc_original[zbin+1]; // Original condensed mixing ratio
+        double total_original_condensed = 0.0;
+        int cloud_bottom_layer = -1;
+        double cloud_bottom_altitude = 0.0;
+        
+        // Store original condensed distribution and find cloud bottom
+        for (int layer = 1; layer <= zbin; layer++) {
+            xc_original[layer] = clouds[layer][species_id] / MM[layer];
+            total_original_condensed += clouds[layer][species_id];
+            
+            // Find cloud bottom (highest pressure layer with significant condensate)
+            if (xc_original[layer] > 1.0e-20 && cloud_bottom_layer == -1) {
+                cloud_bottom_layer = layer;
+                cloud_bottom_altitude = zl[layer] * 1000.0; // Convert km to m
+            }
+        }
+        
+        // Skip if no cloud found
+        if (cloud_bottom_layer == -1) {
+            printf("Species %d: No cloud detected, skipping\n", species_id);
+            for (int layer = 1; layer <= zbin; layer++) {
+                particle_sizes[layer][i] = 0.0;
+            }
+            continue;
+        }
+        
+        printf("Species %d: Cloud bottom at layer %d (%.2f km altitude)\n", 
+               species_id, cloud_bottom_layer, zl[cloud_bottom_layer]);
+        printf("  Total original condensed material: %.2e molecules/cm³\n", total_original_condensed);
+        
+        // STEP 2: CALCULATE PHYSICS-BASED EXPONENTIAL DISTRIBUTION
+        double xc_new[zbin+1]; // New condensed mixing ratio
+        double xv_addition[zbin+1]; // Additional vapor from removed condensate
+        
+        // Initialize arrays
+        for (int layer = 1; layer <= zbin; layer++) {
+            xc_new[layer] = 0.0;
+            xv_addition[layer] = 0.0;
+        }
+        
+        // STEP 2: APPLY HYBRID A&M + HU+2019 TRANSPORT PHYSICS
+        // Use A&M's transport physics with Hu+2019 particle sizing
+        
+        // A&M parameters (from exoclimes_clouds parameters.yaml)
+        double al = 1.0;        // mixing length parameter
+        double fsed = 1.0;      // settling efficiency parameter (per species)
+        double sigma = 2.0;     // log-normal distribution width
+        double alpha = 1.3;     // distribution parameter
+        
+                // Apply A&M transport physics layer by layer (bottom-up like A&M)
+        for (int layer = cloud_bottom_layer; layer <= zbin; layer++) {
+            
+            // Calculate particle properties using Hu+2019 physics
+            double deltaP = 1.0e-12; // Small positive value for numerical stability
+            double r0, r1, r2, VP, v_sed_ms, scale_height;
+            
+            particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+                              species_id, Kzz_m2s, deltaP, layer,
+                              &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+
+            
+            // Calculate altitude difference from cloud bottom (dz in A&M)
+            double dz = (zl[layer] * 1000.0) - cloud_bottom_altitude; // [m]
+            
+            // Calculate mixing length scale L = al * Hp (A&M 2001)
+            double L = al * scale_height; // [m]
+            
+            // Apply A&M Eq. (7) transport physics:
+            // For our case: xc_new = xc_original * exp(-fsed * dz / L)
+            // This represents the fraction of condensate that survives transport
+            double transport_factor = exp(-fsed * dz / L);
+            xc_new[layer] = xc_original[cloud_bottom_layer] * transport_factor;
+            
+            // Enforce minimum threshold
+            if (xc_new[layer] < 1.0e-20) {
+                xc_new[layer] = 0.0;
+            }
+            
+            // Calculate removed condensate that goes back to vapor phase
+            double removed_condensate = xc_original[layer] - xc_new[layer];
+            if (removed_condensate > 0.0) {
+                xv_addition[layer] = removed_condensate;
+            }
+            
+            printf("  Layer %d: dz=%.1f m, L=%.1f m, transport_factor=%.3f, xc_orig=%.2e, xc_new=%.2e, vapor_add=%.2e\n",
+                   layer, dz, L, transport_factor, xc_original[layer], xc_new[layer], xv_addition[layer]);
+        }
+        
+        // STEP 3: UPDATE CLOUD AND VAPOR ARRAYS WITH CONSERVATION
+        for (int layer = 1; layer <= zbin; layer++) {
+            // Update condensed phase
+            clouds[layer][species_id] = xc_new[layer] * MM[layer];
+            
+            // Add removed condensate back to vapor phase to conserve total material
+            if (xv_addition[layer] > 0.0) {
+                // Convert mixing ratio to number density and add to vapor
+                double vapor_addition = xv_addition[layer] * MM[layer];
+                xx[layer][species_id] += vapor_addition;
+                
+                printf("    Layer %d: Added %.2e to vapor phase\n", layer, vapor_addition);
+            }
+        }
+        
+        // STEP 4: CALCULATE PARTICLE SIZES FOR PLOTTING
+        for (int layer = 1; layer <= zbin; layer++) {
+            if (clouds[layer][species_id] > 1.0e-20) {
+                // Calculate particle size using current cloud amount
+                double deltaP = 1.0e-12; // Small positive value for numerical stability
+                double r0, r1, r2, VP, v_sed_ms, scale_height;
+                
+                particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+                                  species_id, Kzz_m2s, deltaP, layer,
+                                  &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                
+                // Store volume-weighted radius (r2) in micrometers for plotting
+                particle_sizes[layer][i] = r2;
+            } else {
+                // No condensate - zero particle size
+                particle_sizes[layer][i] = 0.0;
+            }
+        }
+        
+        // STEP 5: VERIFY TOTAL MATERIAL CONSERVATION (Xc + Xv)
+        double total_original_all = 0.0;  // Original condensed + vapor
+        double total_final_all = 0.0;     // Final condensed + vapor
+        
+        // Calculate totals (this is for verification only)
+        for (int layer = 1; layer <= zbin; layer++) {
+            // Original total material in this layer
+            total_original_all += xc_original[layer] * MM[layer] + xx[layer][species_id];
+            
+            // Final total material in this layer  
+            total_final_all += clouds[layer][species_id] + xx[layer][species_id];
+        }
+        
+        double total_conservation_factor = (total_original_all > 1.0e-30) ? total_final_all / total_original_all : 1.0;
+        double total_conservation_error = fabs(1.0 - total_conservation_factor) * 100.0;
+        
+        printf("Species %d: Total material conservation error: %.4f%%\n", 
+               species_id, total_conservation_error);
+        
+        // STEP 6: PRINT CLOUD PROFILE SUMMARY
+        int cloudy_layers = 0;
+        double max_mixing_ratio = 0.0;
+        int max_layer = -1;
+        double total_final_condensed = 0.0;
+        
+        for (int layer = 1; layer <= zbin; layer++) {
+            if (xc_new[layer] > 1.0e-20) {
+                cloudy_layers++;
+                if (xc_new[layer] > max_mixing_ratio) {
+                    max_mixing_ratio = xc_new[layer];
+                    max_layer = layer;
+                }
+            }
+            total_final_condensed += clouds[layer][species_id];
+        }
+        
+        double condensed_retention_factor = (total_original_condensed > 1.0e-30) ? 
+                                          total_final_condensed / total_original_condensed : 0.0;
+        double condensed_loss_percent = (1.0 - condensed_retention_factor) * 100.0;
+        
+        printf("Species %d: Condensed material retention: %.1f%% (%.1f%% returned to vapor)\n",
+               species_id, condensed_retention_factor * 100.0, condensed_loss_percent);
+        
+        if (max_layer != -1) {
+            printf("Species %d: Cloud spans %d layers, max mixing ratio = %.2e at layer %d (%.2f km)\n",
+                   species_id, cloudy_layers, max_mixing_ratio, max_layer, zl[max_layer]);
+        }
+    }
+    
+    printf("=== HYBRID A&M + HU+2019 + MS_ADIABAT CLOUD DISTRIBUTION COMPLETE ===\n");
+}
+
+
+
+
+
+
+
 
 

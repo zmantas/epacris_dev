@@ -4,6 +4,16 @@ import os
 import sys
 import pandas as pd
 
+# Live plotting script for EPACRIS atmospheric modeling results
+# 
+# Features:
+# - Plots top 10 species by average VMR
+# - Can force specific species to be plotted (see force_plot list below)
+# - Plots temperature profiles, gas abundances, cloud data, and particle sizes
+# - Handles saturation ratios and heat capacity data
+#
+# Usage: python live_plot.py <step_count> <live_plot_dir> <nmax_iteration>
+
 # Get step count, output directory, and NMAX iteration from command line arguments
 if len(sys.argv) != 4:
     print("Usage: python live_plot.py <step_count> <live_plot_dir> <nmax_iteration>")
@@ -73,6 +83,8 @@ gas_species_numbers = []
 cloud_species_numbers = []
 saturation_ratio_indices = []
 saturation_ratio_species = []
+particle_size_indices = []
+particle_size_species = []
 cp_index = None
 lapse_index = None
 isconv_index = None
@@ -96,6 +108,11 @@ for i, col_name in enumerate(header[2:], 2):  # Skip Temperature and Pressure
         saturation_ratio_indices.append(i)
         species_num = int(col_name.split('_')[2])  # Extract species number from sat_ratio_X
         saturation_ratio_species.append(species_num)
+    elif col_name.startswith('particle_size_'):
+        # This is a particle size column (e.g., particle_size_7, particle_size_9)
+        particle_size_indices.append(i)
+        species_num = int(col_name.split('_')[2])  # Extract species number from particle_size_X
+        particle_size_species.append(species_num)
     elif col_name.startswith('c'):
         # This is a cloud species (with 'c' prefix)
         cloud_indices.append(i)
@@ -105,13 +122,18 @@ for i, col_name in enumerate(header[2:], 2):  # Skip Temperature and Pressure
         gas_indices.append(i)
         gas_species_numbers.append(int(col_name))
 
-# Extract gas, cloud, heat capacity, lapse rate, potential temperature, saturation ratio, and convective data
+# Extract gas, cloud, heat capacity, lapse rate, potential temperature, saturation ratio, particle size, and convective data
 gas_data = data[:, gas_indices]
 cloud_data = data[:, cloud_indices]
 if saturation_ratio_indices:
     saturation_ratio_data = data[:, saturation_ratio_indices]
 else:
     saturation_ratio_data = None
+
+if particle_size_indices:
+    particle_size_data = data[:, particle_size_indices]
+else:
+    particle_size_data = None
 
 if cp_index is not None:
     cp_data = data[:, cp_index]
@@ -193,15 +215,15 @@ if h2o_vmr_data is not None:
             
             # Simple approach: solve p_partial = p_sat(T) for T
             temp_guess = 200.0
-            for _ in range(20):  # Simple iteration
+            for _ in range(1000):  # Simple iteration
                 p_sat = h2o_saturation_pressure(temp_guess)
-                if abs(p_partial - p_sat) < 1e-3:
+                if abs(p_partial - p_sat) < 1e-6:
                     break
                 # Simple adjustment
                 if p_partial > p_sat:
-                    temp_guess += 5.0
+                    temp_guess += 1.0
                 else:
-                    temp_guess -= 5.0
+                    temp_guess -= 1.0
                 temp_guess = max(50.0, min(2000.0, temp_guess))
             
             condensation_temps.append(temp_guess)
@@ -212,40 +234,40 @@ if h2o_vmr_data is not None:
         ax1.plot(condensation_temps, valid_pressures, 'cyan', linewidth=3, linestyle='-', 
                  label=f'H₂O Condensation', alpha=0.9,zorder=100)
     
-else:
-    # Fallback: if H2O data not found, use generic curves
-    print("Warning: H2O data (species 7) not found in gas data. Using generic condensation curves.")
+# else:
+#     # Fallback: if H2O data not found, use generic curves
+#     print("Warning: H2O data (species 7) not found in gas data. Using generic condensation curves.")
     
-    # Use the same pressure range as the atmospheric profile
-    pressure_range = np.logspace(np.log10(min(pressure)), np.log10(max(pressure)), 100)
+#     # Use the same pressure range as the atmospheric profile
+#     pressure_range = np.logspace(np.log10(min(pressure)), np.log10(max(pressure)), 100)
     
-    # Plot generic curves for typical VMR values
-    for vmr, style, alpha_val in [(0.01, '--', 0.5), (0.1, ':', 0.8), (0.5, '-.', 0.5)]:
-        condensation_temps_generic = []
-        for p_bar in pressure_range:
-            p_total = p_bar * 1e5  # Convert bar to Pa
-            p_partial = vmr * p_total
-            temp_guess = 200.0
-            for iteration in range(50):
-                p_sat = h2o_saturation_pressure(temp_guess)
-                error = p_partial - p_sat
-                if abs(error) < 1e-6:
-                    break
-                if temp_guess > 273.16:
-                    a = 1 - 373.15/temp_guess
-                    dp_dt = p_sat * (13.3185 * 373.15/temp_guess**2 - 2*1.97*a*373.15/temp_guess**2 
-                                   - 3*0.6445*a*a*373.15/temp_guess**2 - 4*0.1229*a*a*a*373.15/temp_guess**2)
-                else:
-                    dp_dt = p_sat * (5723.265/temp_guess**2 + 3.53068/temp_guess - 0.00728332)
-                if abs(dp_dt) > 1e-10:
-                    temp_guess = temp_guess - error / dp_dt
-                else:
-                    temp_guess = temp_guess + 1.0
-                temp_guess = max(50.0, min(2000.0, temp_guess))
-            condensation_temps_generic.append(temp_guess)
+#     # Plot generic curves for typical VMR values
+#     for vmr, style, alpha_val in [(0.01, '--', 0.5), (0.1, ':', 0.8), (0.5, '-.', 0.5)]:
+#         condensation_temps_generic = []
+#         for p_bar in pressure_range:
+#             p_total = p_bar * 1e5  # Convert bar to Pa
+#             p_partial = vmr * p_total
+#             temp_guess = 200.0
+#             for iteration in range(50):
+#                 p_sat = h2o_saturation_pressure(temp_guess)
+#                 error = p_partial - p_sat
+#                 if abs(error) < 1e-6:
+#                     break
+#                 if temp_guess > 273.16:
+#                     a = 1 - 373.15/temp_guess
+#                     dp_dt = p_sat * (13.3185 * 373.15/temp_guess**2 - 2*1.97*a*373.15/temp_guess**2 
+#                                    - 3*0.6445*a*a*373.15/temp_guess**2 - 4*0.1229*a*a*a*373.15/temp_guess**2)
+#                 else:
+#                     dp_dt = p_sat * (5723.265/temp_guess**2 + 3.53068/temp_guess - 0.00728332)
+#                 if abs(dp_dt) > 1e-10:
+#                     temp_guess = temp_guess - error / dp_dt
+#                 else:
+#                     temp_guess = temp_guess + 1.0
+#                 temp_guess = max(50.0, min(2000.0, temp_guess))
+#             condensation_temps_generic.append(temp_guess)
         
-        ax1.plot(condensation_temps_generic, pressure_range, 'cyan', linewidth=2, linestyle=style, 
-                 alpha=alpha_val, label=f'H₂O Condensation (VMR={vmr:.2f})')
+#         ax1.plot(condensation_temps_generic, pressure_range, 'cyan', linewidth=2, linestyle=style, 
+#                  alpha=alpha_val, label=f'H₂O Condensation (VMR={vmr:.2f})')
 
 # Mark convective layers if data is available
 if isconv_data is not None:
@@ -303,10 +325,10 @@ if radiative_diagnostics and convergence_tolerances:
     stefan_boltzmann = 5.67e-8  # W m^-2 K^-4
     
     # Surface temperature (bottom of atmosphere)
-    t_surface = t_new[0] if len(t_new) > 0 else 0.0
+    t_surface = t_new[-1] if len(t_new) > 0 else 0.0
     
     # TOA temperature (top of atmosphere) 
-    t_toa = t_new[-1] if len(t_new) > 0 else 0.0
+    t_toa = t_new[0] if len(t_new) > 0 else 0.0
     
     # Estimate outgoing longwave radiation from surface temperature
     olr_surface = stefan_boltzmann * t_surface**4 if t_surface > 0 else 0.0
@@ -433,6 +455,44 @@ for i, (idx, avg) in enumerate(top_10_gas):
     # Store color for this species
     species_colors[std_num] = color
 
+# Get list of species already plotted in top 10 to avoid duplicates
+already_plotted = set(gas_species_numbers[idx] for idx, _ in top_10_gas)
+
+# Force specific species to be plotted (in addition to top 10)
+force_plot = []
+for std_num_str in force_plot:
+    try:
+        std_num = int(std_num_str)
+        # Only plot if not already plotted in top 10
+        if std_num not in already_plotted:
+            # Find the index of the species in gas_species_numbers
+            try:
+                species_idx = gas_species_numbers.index(std_num)
+                vmr = gas_data[:, species_idx]
+                
+                # Calculate average VMR for the label (excluding NaNs and very small values)
+                vmr_clean = vmr[~np.isnan(vmr)]  # Remove NaNs
+                vmr_clean = vmr_clean[vmr_clean > 1e-30]  # Remove very small values (more appropriate threshold)
+                if len(vmr_clean) > 0:
+                    avg_vmr = np.mean(vmr_clean)
+                    label = f"{name} (forced, {avg_vmr:.2e})"
+                else:
+                    label = f"{name} (forced, <1e-30)"
+                
+                # Use a distinct color for forced species (avoiding index errors)
+                color_idx = (len(COLORS) + force_plot.index(std_num_str)) % len(COLORS)
+                color = COLORS[color_idx]
+                ax2.plot(vmr, pressure, color=color, linewidth=2, label=label)
+                # Store color for this species
+                species_colors[std_num] = color
+            except ValueError:
+                print(f"Warning: Species number {std_num} not found in gas_species_numbers for forced plot.")
+        else:
+            print(f"Info: Species {std_num} already plotted in top 10, skipping duplicate.")
+    except ValueError:
+        print(f"Warning: Skipping invalid species number '{std_num_str}' in force_plot list.")
+
+
 # Check for and plot non-zero cloud data
 has_clouds = False
 for i, std_num in enumerate(cloud_species_numbers):
@@ -468,10 +528,54 @@ ax2.set_ylim(max(pressure), min(pressure))
 ax2.set_xlim(1e-14, 1)
 ax2.set_xlabel('Volume Mixing Ratio', fontsize=12)
 ax2.set_ylabel('Pressure (Bar)', fontsize=12)
-ax2.set_title('Gas & Cloud Abundances', fontsize=14)
+ax2.set_title('Gas & Cloud Abundances + Particle Sizes', fontsize=14)
 ax2.tick_params(axis='both', which='major', labelsize=10)
-ax2.legend(bbox_to_anchor=(0.5, 1.08), loc='center', fontsize=8, ncol=3)
 ax2.grid(True, alpha=0.3)
+
+# Create twin axis for particle sizes
+if particle_size_data is not None:
+    ax2_twin = ax2.twiny()
+    
+    # Plot particle sizes for condensible species
+    for i, species_num in enumerate(particle_size_species):
+        particle_sizes = particle_size_data[:, i]
+        
+        # Only plot if there are significant particle sizes
+        if np.any(particle_sizes > 1e-3):  # Threshold: 1e-3 micrometers
+            # Use same color as corresponding species if available
+            color = species_colors.get(species_num, COLORS[i % len(COLORS)])
+            name = species_names.get(species_num, f"Species {species_num}")
+            
+            # Get non-zero values for proper averaging
+            significant_sizes = particle_sizes[particle_sizes > 1e-3]
+            avg_size = np.mean(significant_sizes) if len(significant_sizes) > 0 else 0
+            
+            # Plot particle sizes with dotted lines and triangle markers
+            ax2_twin.plot(
+                particle_sizes, 
+                pressure, 
+                color=color, 
+                linestyle=':',
+                marker='^', 
+                markersize=3,
+                linewidth=2,
+                alpha=0.8,
+                label=f"{name} (r={avg_size:.1f}μm)"
+            )
+    
+    ax2_twin.set_xscale('log')
+    ax2_twin.set_yscale('log')
+    ax2_twin.set_ylim(max(pressure), min(pressure))
+    ax2_twin.set_xlim(1e-2, 1e3)  # Particle size range: 0.01 to 1000 micrometers
+    ax2_twin.set_xlabel('Particle Size (μm)', fontsize=12, color='darkred')
+    ax2_twin.tick_params(axis='x', colors='darkred')
+    
+    # Combined legend for both axes
+    lines1, labels1 = ax2.get_legend_handles_labels()
+    lines2, labels2 = ax2_twin.get_legend_handles_labels()
+    ax2.legend(lines1 + lines2, labels1 + labels2, bbox_to_anchor=(0.3, 0.91), loc='center', fontsize=7, ncol=2, framealpha=0.2)
+else:
+    ax2.legend(bbox_to_anchor=(0.3, 0.91), loc='center', fontsize=8, ncol=2, framealpha=0.2)
 
 # Heat capacity and lapse rate plot with twin axes
 ax3.plot(cp_data, pressure, 'r-', linewidth=3, label='Heat Capacity')

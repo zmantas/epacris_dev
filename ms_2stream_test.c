@@ -17,6 +17,8 @@
 #include <math.h>
 #include "constant.h"
 
+void pexit(void) {printf("\n%s\n","=========================\n==== EXITING PROGRAM ====\n=========================\n");}
+
 //=========================================================
 //=== Function identifiers=================================
 void ms_two_str_solver(int lbin, double w[], double g[], double tau[], int nrl, int isconv[], double **Tvar, int jTvar, double P[], double **NetFlux, double Fup[], double Fdn[], double Fcup[], double Fcdn[], double Tint);
@@ -97,8 +99,8 @@ void ms_two_str_solver(int lbin, double w[], double g[], double tau[], int nrl, 
     
     //angular parameters
         muD[i] = cos(THETAREF); //...for now constant and the same
-        //ffrac[i] = FADV/muD[i]; //...depends on the definition of FADV, since FADV*muD = 1/4 for global energy balance
-        ffrac[i] = FADV; //ms05/22 testing
+        ffrac[i] = FADV/muD[i]; //...depends on the definition of FADV, since FADV*muD = 1/4 for global energy balance
+        //ffrac[i] = FADV; //ms05/22 testing
         //for numerical stability
         if(muD[i] == 0.5*sqrt(E[i]*(E[i]-wdoub[i])*(1-wdoub[i]*gdoub[i])) ) 
         {    

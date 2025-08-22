@@ -1,49 +1,22 @@
-//
-// Original Author: 
-char authorig[] = "Renyu Hu (renyu.hu@jpl.nasa.gov)";
-// Version: 
-char version[] = "2023, Major RadTrans and Convection upgrades";
-// Editor v2023: 
-char editor[] = "Markus Scheucher (markus.scheucher@jpl.nasa.gov)";
-/* Modifier symbols: 
-    * 'ms_' ... in file names
-    * 'markus<date>' ... in description lines/blocks 
-    * 'ms<date>' ... in-line comments
-*/
-
 #include <stdio.h>
 #include <math.h>
-#include <stdlib.h>
+//#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-
-
-//Input files
-//#include "Input/conv_test/55cnce_conv_test.h"
 #include "Input/conv_test/K2-18b.h"
+
 // Opacity species list
 const char* species[] = {
-    
-    "SO2", "H2O", "NH3", "N2", "CO2", "CO", "CH4"
-    //, "H2S", "NO2", "NO", "O2", "OH","HO2", "HCN", "OCS", 
-    // "O3", 
-    // "C2H6", 
-    // "CH2O2", 
-
-    // "HNO3", 
-    // "N2O",
-    // "C2H2", 
-    // "C2H4", 
-    // "H2CO",
-    // "H2O2"
+    "SO2", "H2O", "NH3", "CO2", "CO", "CH4",  "H2S", "NO2", "NO", "N2",
+    "O2", "OH","HO2", "HCN", "OCS", "O3", "C2H6", "CH2O2", "HNO3", "N2O",
+    "C2H2", "C2H4", "H2CO", "H2O2"
 };
 
 // Define NUM_SPECIES for external files
 #define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
 
 #include "constant.h"
-#include "ms_functions.h" //ms2021
 #include "routine.h"
 #include "global_temp.h"
 #include "nrutil.h"
@@ -61,6 +34,7 @@ double pl[zbin+1];
 double tl[zbin+1];
 double MM[zbin+1];
 double MMZ[zbin+1];
+double GA, scaleheight; // Global variables for gravitational acceleration and scale height
 double wavelength[NLAMBDA];
 double solar[NLAMBDA];
 double crossr[NLAMBDA], crossa[3][NLAMBDA], sinab[3][NLAMBDA], asym[3][NLAMBDA];
@@ -100,13 +74,7 @@ double cloud_retention[zbin+1][MAX_CONDENSIBLES];
 double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
 double MeanH2H2CIA[zbin+1], MeanH2HeCIA[zbin+1], MeanH2HCIA[zbin+1], MeanN2H2CIA[zbin+1], MeanN2N2CIA[zbin+1],MeanCO2CO2CIA[zbin+1];
 double SMeanH2H2CIA[zbin+1], SMeanH2HeCIA[zbin+1], SMeanH2HCIA[zbin+1], SMeanN2H2CIA[zbin+1], SMeanN2N2CIA[zbin+1], SMeanCO2CO2CIA[zbin+1];
-/*markus2021
-char filleq[] = "======================================================================";
-char fillmi[] = "----------------------------------------------------------------------";
-char fillst[] = "**********************************************************************";
-char fillpl[] = "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++";
-*/
-//end edits
+
 
 double new_ttop;
 double rt_drfluxmax_init;
@@ -139,14 +107,13 @@ int CONDENSIBLES[MAX_CONDENSIBLES];
 #include "printout_std_t_exp.c"
 
 
-
 #define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
 
 
 
 //=== START MAIN PROGRAM =================================
 //========================================================
-void main(int argc, char *argv[]) //ms2022: getting rid of warnings
+int main(int argc, char *argv[]) //ms2022: getting rid of warnings
 {
 //========================================================
 //========================================================
@@ -257,6 +224,7 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 	for (i=0; i<NLAMBDA; i++) {
 		solar[i] = solar[i]/ORBIT/ORBIT*FaintSun;  /* convert from flux at 1 AU */
 	}
+    // Extrapolate solar spectrum to longer wavelengths
 	i=0;
 	while (solar[i]>0 || wavelength[i]<9990 ) { i++;}
 	for (j=i; j<NLAMBDA; j++) {
@@ -313,7 +281,8 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 		for (j=1; j<=zbin; j++) {
 			scaleheight = KBOLTZMANN * tl[j] / meanmolecular[j] / AMU / GA /1000.0 ; /* km */
 			z[j] = z[j-1] - scaleheight*log(P[j]/P[j-1]);
-			zl[j] = z[j-1] - scaleheight*log(pl[j]/P[j-1]); //ms2023
+			zl[j] = z[j-1] - scaleheight*log(pl[j]/P[j-1]); 
+
                         zdoub[2*j] = z[j]; //ms2023: double grid
 		}
 //ms2023		for (j=1; j<=zbin; j++) {
@@ -358,6 +327,7 @@ void main(int argc, char *argv[]) //ms2022: getting rid of warnings
 			z[j] = z[j-1] - scaleheight*log(P[j]/P[j-1]);
 			zl[j] = z[j-1] - scaleheight*log(pl[j]/P[j-1]); //ms2023
                         zdoub[2*j] = z[j]; //ms2023: double grid
+            //printf("z[%d] = %f, zl[%d] = %f\n", j, z[j], j, zl[j]);//ms2023
 		}
 //ms2023		for (j=1; j<=zbin; j++) {
 //ms2023			zl[j] = (z[j]+z[j-1])/2.0;
@@ -842,6 +812,9 @@ printf("%s\n\n",fillmi);
     /* compute the initial molecular abundances */
     for (i=1; i<=numx; i++) {labels[i]=labelx[i];}
     for (i=1; i<=numf; i++) {labels[numx+i]=labelf[i];}
+    
+
+    
     mixequil=dmatrix(1,zbin,1,numx+numf);
     for (j=1; j<=zbin; j++) {
         for (i=1; i<=numx+numf; i++) {
@@ -850,6 +823,9 @@ printf("%s\n\n",fillmi);
     }
     chemquil(pl, tl, zbin+1, labels, numx+numf, mixequil,atomfile);
     checkmixequil(numx+numf, mixequil);
+
+
+    
     for (j=1; j<=zbin; j++) {
         for (i=1; i<=numx; i++) {
             Con[(j-1)*numx+i]=MM[j]*mixequil[j][i];
@@ -1061,13 +1037,6 @@ printf("%s\n\n",fillmi);
         }
 
 
-        //planckmeanCIA();
-        printf("Reinterpolating opacities\n");
-        //cleanup_cia_cache();      // Clean up any existing CIA opacity cache
-        //readcia();                // Read CIA opacity data
-        //reinterpolate_all_cia_opacities(); // Reinterpolate CIA opacities
-        //reinterpolate_all_opacities();     // Reinterpolate normal opacities
-        
         /* New Temperature */
         if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET);
         
@@ -1139,6 +1108,7 @@ printf("%s\n\n",fillmi);
 //     //printf("%s\n","OR THAT?");
 // }
 //========================================================
+    return 0;
 }
 //========================================================
 //========================================================
