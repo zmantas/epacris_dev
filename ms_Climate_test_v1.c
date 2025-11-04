@@ -1,6 +1,8 @@
 
 // Config file. Included so IDE can understand variables
 #include "Input/conv_test/K2-18b.h"
+//#include "Input/conv_test/TOI-199b.h"
+
 
 
 #include <stdio.h>
@@ -30,15 +32,16 @@ typedef struct {
     bool flux_converged;
     bool gradient_converged; 
     bool overall_converged;
+    bool net_flux_converged;
 } RTConvergenceStatus;
 
 RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax, 
-                    double Tint, double tol_rc, double tol_rc_r);
+                    double Tint, double tol_rc, double tol_rc_r, double radiationO);
 
 
 
 RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax, 
-                                       double Tint, double tol_rc, double tol_rc_r) {
+                                       double Tint, double tol_rc, double tol_rc_r, double radiationO) {
     RTConvergenceStatus status = {0};
     
     // Calculate reference values
@@ -47,11 +50,10 @@ RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax,
     // Check individual criteria
     status.flux_converged = (Rfluxmax < tol_rc) || (Rfluxmax < tol_rc_r * bb_flux);
     status.gradient_converged = (dRfluxmax < Tol_RC_gradient);
-    
-    // OPTION A: Overall convergence requires BOTH flux AND gradient 
-    // This prevents oscillatory "convergence" where flux meets criteria but is still changing rapidly
-    status.overall_converged = status.flux_converged && status.gradient_converged;
-    
+    status.net_flux_converged = (fabs(radiationO) < tol_rc) || (fabs(radiationO) < tol_rc_r * bb_flux);
+
+    // Return converged if Rflux in layers is converged with either gradient_converged or net_flux_converged
+    status.overall_converged = (status.flux_converged && status.gradient_converged) || (status.flux_converged && status.net_flux_converged);
     return status;
 }
 
@@ -62,8 +64,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     // Initialize variables
     int i,j,k,radcount,jabove,iconden;
     double tempb[zbin+1], tempbnew[zbin+1], tempc[zbin+1]; //temperature profile arrays
-    double znew[zbin+1]; // For something
+    double znew[zbin+1]; // For printing altitude to files
     double lapse[zbin+1], cp[zbin+1];
+    double scaleheight; // For calculating altitude
     //GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET; DELETE?
 
     // Copy temperature to a new array
@@ -74,7 +77,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
    /* Helium calculation 
    The left over mass in the atmosphere is assumed to be helium.
-   If The value is negative, it is set to zero.
+   If the value is negative, it is set to zero.
    Repetitive computation? or for iteration purposes?*/ 
     double heliumnumber[zbin+1];
     for (j=1; j<=zbin; j++) {
@@ -87,6 +90,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
     }
     
+    // Initialize layer-dependent alpha values +++++++++++++++++++++++
+    // Must be called before any ms_adiabat calls to set up layer-specific retention
+    init_alpha_values();
+
     // Condensible detection ++++++++++++++++++++++++++++++++++++++
     // Initialize condensibles mode based on CONDENSATION_MODE setting
     initialize_condensibles_mode();
@@ -160,6 +167,21 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     Rflux = dvector(0,nrl);
 
 //#########################################################
+// INITIALIZE znew WITH INITIAL HYDROSTATIC EQUILIBRIUM
+// Because its not calculated yet
+//#########################################################
+    znew[0] = 0.0;
+    for (j=1; j<=zbin; j++) {
+        tempc[j] = (tempb[j] + tempb[j-1]) / 2.0;
+        //printf("DEBUG j=%d: meanmolecular[%d]=%.6e, tempc[%d]=%.6e\n", j, j, meanmolecular[j], j, tempc[j]);
+        //printf("DEBUG GA=%.6e, AMU=%.6e, KBOLTZMANN=%.6e\n", GA, AMU, KBOLTZMANN);
+        scaleheight = KBOLTZMANN * tempc[j] / meanmolecular[j] / AMU / GA / 1000;
+        //printf("DEBUG scaleheight = %.6e\n", scaleheight);
+        znew[j] = znew[j-1] - scaleheight * log(P[j] / P[j-1]);
+        //printf("DEBUG znew[%d] = %.6e\n", j, znew[j]);;
+    }
+
+//#########################################################
 // For live plotting debugging
 //#########################################################
     int total_step_count = 0; //for live plot, to keep persistence
@@ -176,6 +198,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         sprintf(mkdir_cmd, "mkdir -p \"%s\" 2>/dev/null", live_plot_dir);
     #endif
     system(mkdir_cmd);
+
 //*************************************************************
 // main iterative Rad-Conv loop:
 //*************************************************************
@@ -322,20 +345,19 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // 4. The number of radiative steps is greater than the limit
             
             // Check convergence conditions
-            status = check_rt_convergence(Rfluxmax, dRfluxmax, Tint, Tol_RC, Tol_RC_R);
+            status = check_rt_convergence(Rfluxmax, dRfluxmax, Tint, Tol_RC, Tol_RC_R, radiationO);
             
             // DIAGNOSTIC: Print convergence info every 50 steps
             if ((i == 1 && RTstepcount % PRINT_ITER == 0) || (i > 1 && total_step_count % PRINT_ITER == 0)) {
                 printf("RT CONVERGENCE DIAGNOSTIC - Step %d:\n", RTstepcount);
                 printf("  Rfluxmax = %.4e W/m² (target: < %.2e)\n", Rfluxmax, Tol_RC);
                 printf("  dRfluxmax = %.4e (target: < %.2e)\n", dRfluxmax, Tol_RC_gradient);
-                printf("  OPTION A - Converged: flux=%s, gradient=%s, OVERALL=%s\n", 
+                printf("  radiationO = %.4e (target: < %.2e)\n", radiationO, Tol_RC/2.);
+                printf("  Converged: flux=%s, gradient=%s, net_flux=%s, OVERALL=%s\n", 
                        status.flux_converged ? "YES" : "NO", 
                        status.gradient_converged ? "YES" : "NO",
+                       status.net_flux_converged ? "YES" : "NO",
                        status.overall_converged ? "CONVERGED" : "ITERATING");
-                if (status.flux_converged && !status.gradient_converged) {
-                    printf("  >>> FLUX OK but GRADIENT changing - preventing oscillatory convergence!\n");
-                }
                 printf("\n");
             }
             
@@ -383,6 +405,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             printf("RT achieved convergence after %d steps in RC iteration %d\n", RTstepcount, i);
             printf("Final Rfluxmax = %.3e W/m²\n", Rfluxmax);
             printf("Final dRfluxmax = %.3e W/m²\n", dRfluxmax);
+            printf("Final radiationO = %.3e W/m²\n", radiationO);
             printf("=== PROCEEDING TO CONVECTIVE ADJUSTMENT ===\n\n");
             // Do NOT break here - we need to check convection and clouds
         }
@@ -393,6 +416,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             printf("RT stopped after %d steps (limit) in RC iteration %d\n", RTstepcount, i);
             printf("Final Rfluxmax = %.3e W/m² (target: < %.2e)\n", Rfluxmax, Tol_RC);
             printf("Final dRfluxmax = %.3e W/m² (target: < %.2e)\n", dRfluxmax, Tol_RC_gradient);
+            printf("Final radiationO = %.3e W/m² (target: < %.2e)\n", radiationO, Tol_RC/2.);
             printf("Proceeding to convective adjustment...\n\n");
         }
 
@@ -416,27 +440,6 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 // 1. Calculate condensation equilibrium, lapse rate and heat capacity  
                 ms_adiabat(j,lapse,heliumnumber[j],&cp[j],saturation_ratios[j]); //calculate condensation equilibrium, lapse rate and heat capacity
                 
-                // Ad hoc cold trap, need consistent calculation of cold traps
-                // //need to propagate cold traps upwards
-                // if (j<zbin) {
-                //     for (jabove=j+1; jabove<=zbin; jabove++) {
-                //         for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
-                //             double old_abundance = xx[jabove][CONDENSIBLES[iconden]];
-                //             if (xx[jabove][CONDENSIBLES[iconden]]/MM[jabove] > xx[j][CONDENSIBLES[iconden]]/MM[j]) {
-                //                 xx[jabove][CONDENSIBLES[iconden]] = xx[j][CONDENSIBLES[iconden]]/MM[j]*MM[jabove];
-                //                 printf("COLD TRAP: Layer %d, Species %d - Abundance changed from %.6e to %.6e (forced to match layer %d)\n",
-                //                        jabove, CONDENSIBLES[iconden], old_abundance, xx[jabove][CONDENSIBLES[iconden]], j);
-                //             }
-                //         }
-                //     }
-                // } 
-                
-                // Debug: Show final gas abundances after cold trap propagation
-                // for (iconden=0; iconden<NCONDENSIBLES; iconden++) {
-                //     printf("POST-COLDTRAP: Layer %d, Species %d - Final gas abundance: %.6e (VMR: %.6e)\n",
-                //            j, CONDENSIBLES[iconden], xx[j][CONDENSIBLES[iconden]], xx[j][CONDENSIBLES[iconden]]/MM[j]);
-                // }
-                
                 //check for clouds
                 nclouds[j] = 0;
                 for (k=1;k<=NSP;k++)
@@ -446,37 +449,22 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             }
 
 
-            //apply_equilibrium_cloud_distribution(GA); // Apply A&M 2001 exponential redistribution using real particle sizes from particlesizef_local
-            //apply_exponential_cloud_profile(GA); // Old approach - replaced with proper Exolyn method
-            		//apply_exolyn_cloud_redistribution(GA, P, particle_sizes); // NEW: Proper Exolyn time-stepping cloud redistribution
-            /* new RC boundary */
-
-            // 2. Apply cloud redistribution (your choice)
-            double cloud_to_gas_scale_height_ratio = 0.1; // 30% of scale height
-            if (CLOUD_REDISTRIBUTION == 1) {
-                exponential_cloud(GA, P, cloud_to_gas_scale_height_ratio, particle_sizes);
-            } else if (CLOUD_REDISTRIBUTION == 2) {
-                apply_exolyn_cloud_redistribution(GA, P, particle_sizes);
-            } else if (CLOUD_REDISTRIBUTION == 3) {
-                apply_exolyn_steady_state(GA, P, particle_sizes);
-            } else if (CLOUD_REDISTRIBUTION == 4) {
-                cloud_redistribution_none(GA, P, particle_sizes); // Calculate physics without redistribution
-            } else if (CLOUD_REDISTRIBUTION == 0) {
+            // Calculate cloud properties
+            if (INCLUDE_CLOUD_PHYSICS == 0) {
                 // No cloud physics calculation
+            } else if (INCLUDE_CLOUD_PHYSICS == 1) {
+                cloud_redistribution_none(GA, P, particle_sizes); // Calculate physics without redistribution
+            } else if (INCLUDE_CLOUD_PHYSICS == 2) {
+                exponential_cloud(GA, P, particle_sizes);
             }
-
-
-
 
             ncl = 0;
             nrl = 0;
+
             /* determine convection, and record convective layers */
-
-
             ms_conv_check(tempb, P, lapse, isconv, &ncl, &nrl); //ms22: check convective layers
 
 //          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
-
         // remove single radiative layer between convective layers
 /*          for (j=2; j<zbin; j++) { //rh->ms 2021
                 if (isconv[j]==0 && (isconv[j+1]==1 && isconv[j-1]==1)) {
@@ -543,27 +531,6 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                     RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO);
             // Saturation ratios are updated by ms_adiabat calls above
             write_live_plot_data(total_step_count, live_plot_dir, tempb, P, conv_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
-            
-            // // Check for non-zero cloud abundances
-            // // int found_clouds = 0;
-            // // printf("Checking cloud abundances in profile...\n");
-            // // for (j=0; j<=zbin; j++) {
-            // //     for (k=0; k<NCONDENSIBLES; k++) {
-            // //         int ispec = CONDENSIBLES[k];
-            // //         double cloud_vmr = clouds[j][ispec]/MM[j];
-            // //         if (cloud_vmr > 1.0e-10) {
-            // //             found_clouds = 1;
-            // //             printf("  Non-zero cloud abundance found: Species %d at layer %d (P=%e bar): VMR=%e\n", 
-            // //                    ispec, j, P[j]/1e5, cloud_vmr);
-            // //         }
-            // //     }
-            // // }
-            
-            //     if (!found_clouds) {
-            //         printf("WARNING: All cloud abundances are zero in the current profile!\n");
-            //     }
-
-
             //printf("%s %d\n", "Convection step count = ", total_step_count);
 
             //ms22: check if convective regions were fully addressed:
@@ -574,7 +541,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 prevconv[j] = isconv[j];
             }
             for (j=1; j<=zbin; j++) tl[j] = 0.5* (tempb[j]+tempb[j-1]);
-            //printf("%s %d\n","deltaconv=",deltaconv);
+            printf("%s %d\n","deltaconv=",deltaconv);
 
             
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -638,6 +605,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                        i, rainout_events_completed, MAX_RAINOUT_EVENTS);
             }
         }
+
+
+
         // /* PRESSURE ADJUSTMENT for realistic rainout approach */
         // if (PRESSURE_CONSERVATION == 1) {
         //     // Calculate total mass loss across all layers during this convective step
@@ -692,12 +662,13 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         // This should be a small effect compared to Graham's alpha removal approach
         
         /* hydrostatic equilibrium */
-        // printf("=== Computing hydrostatic equilibrium ===\n");
+        printf("=== Computing hydrostatic equilibrium ===\n");
         znew[0]=0.0;
         for (j=1; j<=zbin; j++) {
             tempc[j] = (tempb[j]+tempb[j-1])/2.0;
             scaleheight = KBOLTZMANN * tempc[j] / meanmolecular[j] / AMU / GA / 1000 ;
             znew[j] = znew[j-1] - scaleheight*log(P[j]/P[j-1]);
+
             //ms23: double grid
             Tdoub[2*j] = tempb[j];
             Tdoub[2*j-1] = tempc[j];
@@ -778,8 +749,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
         // LIVE PLOT AFTER TEMPERATURE SMOOTHING (END OF RC ITERATION)
         char final_rc_diag[512];
-        sprintf(final_rc_diag, "RC_ITERATION_END: RC=%d ncl=%d nrl=%d isconv_sum=%d", 
-                i, ncl, nrl, isconv_sum);
+        sprintf(final_rc_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e RC_ITERATION_END: RC=%d isconv_sum=%d", 
+                RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO, i, isconv_sum);
         // Saturation ratios were updated during convective adjustment
         write_live_plot_data(total_step_count, live_plot_dir, tempeq, P, final_rc_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
 

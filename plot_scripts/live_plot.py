@@ -361,7 +361,7 @@ if radiative_diagnostics and convergence_tolerances:
     diag_text = f"Energy Balance: {energy_balance_pct:.1f}%\n"
     
     # Status based on energy balance
-    if energy_balance_pct >= 95:
+    if energy_balance_pct >= 99:
         status_text = "EXCELLENT"
         status_color = 'green'
     elif energy_balance_pct >= 85:

@@ -4,13 +4,15 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 #include "Input/conv_test/K2-18b.h"
+//#include "Input/conv_test/TOI-199b.h"
 
 // Opacity species list
 const char* species[] = {
-    "SO2", "H2O", "NH3", "CO2", "CO", "CH4",  "H2S", "NO2", "NO", "N2",
-    "O2", "OH","HO2", "HCN", "OCS", "O3", "C2H6", "CH2O2", "HNO3", "N2O",
-    "C2H2", "C2H4", "H2CO", "H2O2"
+    "H2O", "NH3", "CO2", "CO", "CH4",  "H2S",  "N2","OH"
+    //"C2H6", "CH2O2", "HNO3", "N2O","SO2","NO2", "NO","O2","O3", "OCS","HCN", "HO2", 
+    //"C2H2", "C2H4", "H2CO", "H2O2"
 };
 
 // Define NUM_SPECIES for external files
@@ -169,7 +171,7 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     int numx1=1, numf1=1, numc1=1;
     char *temp;
     char dataline[10000];
-    double temp1, wavetemp, crosstemp, DD, GA, DenZ;
+    double temp1, wavetemp, crosstemp, DD, DenZ;
     double z[zbin+1], T[zbin+1], PP[zbin+1], P[zbin+1], tempeq[zbin+1];
     double **JJ, **qy, *wavep, *crossp, *qyp, *qyp1, *qyp2, *qyp3, *qyp4, *qyp5, *qyp6, *qyp7;
     double **qyt, *crosspt, *qypt, *qyp1t, *qyp2t, *qyp3t, *qyp4t, *qyp5t, *qyp6t, *qyp7t;
@@ -237,8 +239,7 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
 		meanmolecular[j] = AIRM;
 	}
 	
-//printf("%s\n\n",fillmi);
-	double PMIN, PMAX, PSTEP, scaleheight;
+	double PMIN, PMAX, PSTEP;
 	/* Set up the P-T-z for calculation */
 	if (TPMODE==1) {
 		fp=fopen(TPLIST,"r");
@@ -950,10 +951,9 @@ printf("%s\n\n",fillmi);
             break;
         }
         
-        /* If not converged, update */
-        /* update */
+        // If not converged, continue to next iteration
         
-        /* Reset clouds array to prevent accumulation between iterations */
+        // Reset clouds array to prevent accumulation between iterations */
         for (j=1; j<=zbin; j++) {
             for (ii=1; ii<=NSP; ii++) {
                 clouds[j][ii] = 0.0;
@@ -961,6 +961,8 @@ printf("%s\n\n",fillmi);
         }
         printf("%s\n", "Cloud array reset for new iteration");
         
+
+        // T grids recalculated
         for (j=0; j<=zbin; j++) {
             T[j] = Tnew[j];
             Tdoub[2*j] = T[j]; //ms2023: double grid
@@ -969,6 +971,8 @@ printf("%s\n\n",fillmi);
             tl[j] = (T[j]+T[j-1])/2.0;
             Tdoub[2*j-1] = tl[j]; //ms2023: double grid
         }
+
+        // z grids recalculated
         z[0] = 0.0;
         for (j=1; j<=zbin; j++) {
             scaleheight = KBOLTZMANN * tl[j] / meanmolecular[j] / AMU / GA /1000.0 ; /* km */
@@ -979,6 +983,8 @@ printf("%s\n\n",fillmi);
             zl[j] = (z[j]+z[j-1])/2.0;
             zdoub[2*j-1] = zl[j]; //ms2023: double grid
         }
+
+        // MMZ grids recalculated
         for (j=0; j<=zbin; j++) {
             MMZ[j] = P[j]/KBOLTZMANN/T[j]*1.0E-6;
             MMdoub[2*j] = MMZ[j]; //ms2023: double grid
@@ -990,8 +996,7 @@ printf("%s\n\n",fillmi);
         }
 
         
-        /* Re-calculate the initial mixing ratio from chemical equilibrium  */
-        //if (IMODE==0 || IMODE==4) {
+        // Re-calculate the initial mixing ratio from chemical equilibrium 
         if (IMODE==0) {
             mixequil=dmatrix(1,zbin,1,numx+numf);
             for (j=1; j<=zbin; j++) {
@@ -1032,12 +1037,12 @@ printf("%s\n\n",fillmi);
             totalnumber += heliumnumber;
             totalmass += heliumnumber*4.0;
             meanmolecular[j] = totalmass/totalnumber;
-                //printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer", j, "is", meanmolecular[j]);
-                //printf("%s %d %s %2.2e\n","Helium mixing ratio at layer", j, "is", heliumnumber/totalnumber);
+            // printf("%s %d %s %2.2f\n","Mean Molecular Mass at layer", j, "is", meanmolecular[j]);
+            // printf("%s %d %s %2.2e\n","Helium mixing ratio at layer", j, "is", heliumnumber/totalnumber);
         }
 
 
-        /* New Temperature */
+        // Rad-conv solver
         if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET);
         
         if(RadConv_Solver == 1) {

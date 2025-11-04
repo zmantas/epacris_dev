@@ -58,13 +58,13 @@ Note: The parameters in this file can be modified to model different planets aro
 			4: Import from results of previous calculations in the standard form (TP import only for rad) 
                         */
 
-#define ELE_ABUN        "Input/elemental_abundance_files/new_x1Solar.dat"
+#define ELE_ABUN        "Input/elemental_abundance_files/new_x10Solar.dat"
 
 /* Iteration Conditions */
 #define NMAX        2       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     20       /* Maximum Radiative - Convective Iterations, minimum 1 */
-#define NMAX_RT     400  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      20  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
+#define NMAX_RC     10       /* Maximum Radiative - Convective Iterations, minimum 1 */
+#define NMAX_RT     600  /* Maximum Radiative Transfer Iterations */
+#define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 #define PRINT_ITER  100  //x steps to print parameters
 /* Planet Physical Properties */
 //M_Jupiter = 1.8982E+27kg (=317.8 M_Earth)
@@ -101,7 +101,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define PSURFAB	    0.0000		/* Planet Surface Reflectivity */
 #define PSURFEM	    1.0000		/* Planet Surface Emissivity */
 /* Initial Heat Flux */
-#define TINTSET	    50.0		/* Internal Heat Temperature */
+#define TINTSET	    200.0		/* Internal Heat Temperature */
 
 
 /* Set up calculation grid and temperature-pressure profile intial conditions */
@@ -166,6 +166,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define Tol_RC_R    1.0E-2  /* convergence tolerance in unbalanced radiative flux, per internal heat flux (net outgoing flux) - RELAXED from 1e-3 */
 #define Tol_RC      1.0E+0  /* convergence tolerance in unbalanced radiative flux, in absolute quantity in W/m2 - RELAXED from 1e-1 */
 #define Tol_FRATIO  1.0E-4  /* convergence tolerance in unbalanced radiative flux per layer against layer radiance SIGMA*T^4 */
+#define Tol_RC_gradient 1.0e-0  /* convergence tolerance in unbalanced radiative flux gradient */
 
 //this is for matrix solver i think
 #define R_RELAX     1.0e-1     /* relaxation factor in implicit Euler stepping of radiative balance */
@@ -199,7 +200,7 @@ Note: The parameters in this file can be modified to model different planets aro
 #define NPho        71   /*Number of Photochemical Reaction in the standard list*/
 #define	THREEBODY   1.0	/* Enhancement of THREEBODY Reaction when CO2 dominant */
 #define NATOMS      23            /* Number of atoms for chemical equil     */
-#define NMOLECULES  168       /* Number of molecules for chemical equil */
+#define NMOLECULES  172       /* Number of molecules for chemical equil */
 #define MOL_DATA_FILE "Library/ChemEqu/molecules_all.dat" /* Data file for chemical equilibrium calculation */
 
 

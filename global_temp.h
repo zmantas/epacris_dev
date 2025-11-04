@@ -52,6 +52,7 @@ extern int CONDENSIBLES[];
 // Additional global variables
 extern double Tdoub[];
 extern int RTstepcount;
+extern double GA; // Gravitational acceleration
 
 // Enhanced cloud physics arrays
 extern double particle_radius_um[zbin+1][MAX_CONDENSIBLES];
@@ -69,11 +70,11 @@ void apply_enhanced_cloud_physics(int layer, double gravity);
 void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes);
 void apply_equilibrium_cloud_distribution(double gravity);
 void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass);
-void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, double deltaP, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height);
+void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height);
 
 // Global alpha storage functions
-void initialize_global_alpha_values();
-void update_global_alpha_values(int layer, int species_index, double alpha_value);
+void init_alpha_values();
+void update_alpha_from_cold_trapping(int layer, int species_index, double alpha_reduction);
 double get_global_alpha_value(int layer, int species_index);
 
 // Dynamic condensation detection functions
