@@ -554,19 +554,17 @@ if particle_size_data is not None:
             ax2_twin.plot(
                 particle_sizes, 
                 pressure, 
-                color=color, 
-                linestyle=':',
-                marker='^', 
-                markersize=3,
+                color='red', 
+                linestyle='-',
                 linewidth=2,
-                alpha=0.8,
+                alpha=1,
                 label=f"{name} (r={avg_size:.1f}μm)"
             )
     
-    ax2_twin.set_xscale('log')
+    #ax2_twin.set_xscale('log')
     ax2_twin.set_yscale('log')
     ax2_twin.set_ylim(max(pressure), min(pressure))
-    ax2_twin.set_xlim(1e-2, 1e3)  # Particle size range: 0.01 to 1000 micrometers
+    ax2_twin.set_xlim(5., 40)  # Particle size range: 0.01 to 1000 micrometers
     ax2_twin.set_xlabel('Particle Size (μm)', fontsize=12, color='darkred')
     ax2_twin.tick_params(axis='x', colors='darkred')
     

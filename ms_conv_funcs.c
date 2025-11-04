@@ -1138,16 +1138,17 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
 
 
 void cloud_redistribution_none(double gravity, double P[], double **particle_sizes) {
-
-    printf("=== CALCULATING CLOUD PHYSICS (NO REDISTRIBUTION) ===\n");
     
     // Compute particle physics but not redistribution
     for (int layer = 1; layer <= zbin; layer++) {
         for (int i = 0; i < NCONDENSIBLES; i++) {
             int species_id = CONDENSIBLES[i];
             
-            // Skip if no condensate in this layer
-            if (clouds[layer][species_id] < 1.0e-20) continue;
+            // Skip if no condensate in this layer - reset particle size
+            if (clouds[layer][species_id] < 1.0e-20) {
+                particle_sizes[layer][i] = 0.0;  // Reset when condensation stops
+                continue;
+            }
             
             // Get temperature and pressure for this layer
             double T = tl[layer];
@@ -1167,8 +1168,6 @@ void cloud_redistribution_none(double gravity, double P[], double **particle_siz
         }
     }
 
-    
-    printf("=== CLOUD PHYSICS CALCULATION COMPLETE ===\n");
     printf("Particle properties computed - no material redistribution performed\n");
 }
 
