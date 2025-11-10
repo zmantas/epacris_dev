@@ -250,8 +250,10 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
            
             // --- Cloud opacities and albedos ---     
             // H2O cloud: absorption and scattering
-            wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i])/MM[j1];
-            ws[j] += cH2O[j1][i]*aH2O[j1][i]/MM[j1];
+            // cH2O is already multiplied by number density (particles/m³)
+            // and is in units of cm^-1 (extinction coefficient), so no need to adjust
+            wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i]); //portion is reflected with albedo
+            ws[j] += cH2O[j1][i]*aH2O[j1][i]; //portion is scattered with albedo
             // NH3 cloud (to be implemented later)
             //wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i])/MM[j1];
             //ws[j] += cNH3[j1][i]*aNH3[j1][i]/MM[j1];
