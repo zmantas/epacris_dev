@@ -249,10 +249,12 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
             //ws[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]; */
            
             // --- Cloud opacities and albedos ---     
-            /* wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i])/MM[j1];
-            wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i])/MM[j1];
+            // H2O cloud: absorption and scattering
+            wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i])/MM[j1];
             ws[j] += cH2O[j1][i]*aH2O[j1][i]/MM[j1];
-            ws[j] += cNH3[j1][i]*aNH3[j1][i]/MM[j1]; */
+            // NH3 cloud (to be implemented later)
+            //wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i])/MM[j1];
+            //ws[j] += cNH3[j1][i]*aNH3[j1][i]/MM[j1];
             
             if (ws[j] > 0.0) {
                 w[j]  = ws[j]/(wa[j]+ws[j]);
@@ -289,8 +291,10 @@ for (i=0;i<=zbin;i++)
 			j1   = zbin+1-j;
 			/* g[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i]*asym[1][i];
 			g[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]*asym[2][i]; */
-            /*g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i]/MM[j1];
-			g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i]/MM[j1];*/
+            // H2O cloud asymmetry parameter
+            g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i]/MM[j1];
+			// NH3 cloud (to be implemented later)
+			//g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i]/MM[j1];
 			if (ws[j] > 0.0) {
 				g[j] = g[j]/ws[j];
 			} else {

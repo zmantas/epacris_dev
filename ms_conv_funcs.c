@@ -32,9 +32,8 @@ double H2SHeat(double T);
 
 void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]); // calculate lapse rate (NO rainout)
 void ms_rainout(int lay, double* mass_loss_ratio); // apply rainout physics
-void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes); // Proper Exolyn cloud redistribution with time-stepping transport
-void exponential_cloud(double gravity, double P[], double **particle_sizes); // HELIOS-style exponential cloud distribution
-void cloud_redistribution_none(double gravity, double P[], double **particle_sizes); // Calculate cloud physics without redistribution
+void exponential_cloud(double gravity, double P[], double **particle_r2); // HELIOS-style exponential cloud distribution
+void cloud_redistribution_none(double gravity, double P[]); // Calculate cloud physics without redistribution
 void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass); // get species-specific properties
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);   // Checks each pair of layers for convective stability
 void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]); // Adjust temperatures due to convection
@@ -218,6 +217,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
     Xd = 1.0; //mole fraction of non-condensible gas
     cp_d = 0.0; //heat capacity of non-condensible gas
 
+
     //Assign mol fractions:
     for (i=0; i<NCONDENSIBLES; i++)
     {
@@ -254,7 +254,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
 
 
         // Start condensation calculation
-        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account. Divide by MM to get mole fraction.
+        Xc[i] = clouds[lay][CONDENSIBLES[i]]/MM[lay]; //preexisting clouds taken into account. Divide by MM to get mole fraction from molecules cm^-3
         Xv[i] = xx[lay][CONDENSIBLES[i]]/MM[lay]; //gas fraction of condensibles MM is in molec/cm^3
 
                 // Calculate total available condensible amount. Does not include the dry component
@@ -588,9 +588,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
     for (i=0; i<NCONDENSIBLES; i++) {
         xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
         clouds[lay][CONDENSIBLES[i]] = Xc[i] * MM[lay];
-
-
-        
+   
         // Calculate and store saturation ratios for plotting
         // saturation_ratio = partial_pressure / saturation_pressure
         double partial_pressure = Xv[i] * pl[lay];
@@ -876,7 +874,9 @@ void get_particle_properties(int species_id, double temperature, double *density
 // Core Physics: Particles grow until fall velocity balances with diffusion
 // Key Equation: u = v_fall * H / K_zz (dimensionless fall parameter)
 // Where: H = scale height [m], K_zz = eddy diffusion coefficient [m²/s]
-void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height) {
+void calculate_cloud_properties(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, 
+    double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity,
+     double *scale_height, double *mass_per_particle, double *n_density) {
     // Local constants to avoid conflicts with main code
     double KB_local = 1.3806503E-23; // Boltzmann constant [J/K]
     double AMU_local = 1.66053886E-27; // Atomic mass unit [kg]
@@ -1001,6 +1001,7 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
         // SOLVE QUADRATIC EQUATION: aa*V^(2/3) + bb*V^(1/3) + cc = 0
         // Using quadratic formula after substituting V^(1/3) = x
         // This gives equilibrium volume where growth = settling + diffusion
+        // V = [(-bb + sqrt(bb * bb - 4.0 * aa * cc)) / 2.0 / aa]^(3/2)
         double V = pow((-bb + sqrt(bb * bb - 4.0 * aa * cc)) / 2.0 / aa, 3.0 / 2.0);
         
         // Handle cases where updraft dominates (no real solution)
@@ -1028,7 +1029,7 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
         
         // CHECK CONVERGENCE: Continue iteration until slip factors stabilize
         if (fabs(Cc1 - Cc0) + fabs(fa1 - fa) < 0.001) {
-            Vs = V; // Final equilibrium volume [m³]
+            Vs = V; // Final volume [m³]
             break;
         } else {
             Cc0= Cc1; // Update slip correction
@@ -1051,12 +1052,11 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     // This is used for sedimentation calculations since fall velocity ∝ r²
     *r2 = pow((3.0 * Vs) / (4.0 * PI_local), 1.0 / 3.0) * exp(-0.5 * pow(log(sig), 2.0)) * 1.0E+6;
     
-    // VP: Total particle volume in microns^3 [μm³]
+    // VP: Final particle volume in cm³ (convert from m³: 1 m³ = 1e6 cm³)
     *VP = Vs * 1.0E+6;
 
-    // Need to use different r for opacity, not r2? not used for now
-    double r0_for_opacity = *r2 * exp(-pow(log(2.0), 2.0)); // Same as Hu+2019
-
+    // Calculate mass per particle [kg] (Vs in m³, rho in kg/m³)
+    *mass_per_particle = Vs * rho;
 
     // This is the cloud density but not used now
     // 1. Get cloud mass density from Hu+2019 Equation 2:
@@ -1069,9 +1069,7 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     //double particle_number_density = calculate_particle_number_density_from_molecules(molecular_number_density, particle_radius_m, condensate_density, molecular_mass_kg);
     //*particle_number_density = particle_number_density;
 
-    // Use r2 (volume-weighted radius) for sedimentation calculations
-    double particle_radius_m = *r2 * 1.0e-6; // Convert μm to m
-    
+
     // HU+2019 APPROACH: Use their Equation A3 for settling velocity
     // From Hu+2019 Appendix, Equation A3: v_d = max[v_fall - u, 0]
     // where v_fall = ρ_p*g*Cc/(162π²)^(1/3)*μ * V^(2/3) * exp(-ln²σ)
@@ -1085,20 +1083,25 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
 
     double v_d = fmax(0.0, v_fall_hu2019 - u);
     
+    // Use r2 (volume-weighted radius) for sedimentation calculations
+    double particle_radius_m = *r2 * 1.0e-6; // Convert μm to m
+
     // Alternative: Calculate using Stokes law with final particle size
     // v_fall = 2*r²*ρ*g*Cc/(9*μ) - Stokes law with Cunningham correction
     // Value comes out the same as Hu+2019, confirming derivation
     double gravitational_settling = (2.0 * particle_radius_m * particle_radius_m * rho * g * Cc0) / (9.0 * mu);
 
-    // Calculate mass per particle [kg]
-    double mass_per_particle = *VP * 1.0e-18 * rho;
-    
-    double molecules_per_particle = mass_per_particle / (molecular_mass_condensible * AMU_local);
+    // Calculate molecules per particle using the mass_per_particle output parameter
+    double molecules_per_particle = (*mass_per_particle) / (molecular_mass_condensible * AMU_local);
     // Calculate particle number density [particles/m³]
     // n_particles = n_molecules * m_molecule / m_particle
-    double particle_number_density = clouds[layer][condensible_species_id] / molecules_per_particle;
+    *n_density = clouds[layer][condensible_species_id] / molecules_per_particle;
 
-    
+
+
+    // Return the actual fall velocity and scale height
+    *effective_settling_velocity = gravitational_settling; // [m/s] - actual fall velocity
+    *scale_height = H; // [m]
     // Debug output to verify the theory
     // Useful debug output
     // if (layer >= 55 && layer <= 65) {
@@ -1128,16 +1131,11 @@ void particlesizef_local(double g, double T, double P, double mean_molecular_mas
     // printf ("scale_height: %.2e\n", H);
     // printf ("==============================================\n");
     // printf ("==end==\n");
-
-    // Return the actual fall velocity and scale height
-    *effective_settling_velocity = gravitational_settling; // [m/s] - actual fall velocity
-    *scale_height = H; // [m]
-
 }
 
 
 
-void cloud_redistribution_none(double gravity, double P[], double **particle_sizes) {
+void cloud_redistribution_none(double gravity, double P[]) {
     
     // Compute particle physics but not redistribution
     for (int layer = 1; layer <= zbin; layer++) {
@@ -1146,7 +1144,7 @@ void cloud_redistribution_none(double gravity, double P[], double **particle_siz
             
             // Skip if no condensate in this layer - reset particle size
             if (clouds[layer][species_id] < 1.0e-20) {
-                particle_sizes[layer][i] = 0.0;  // Reset when condensation stops
+                particle_r2[layer][i] = 0.0;  // Reset when condensation stops
                 continue;
             }
             
@@ -1154,17 +1152,31 @@ void cloud_redistribution_none(double gravity, double P[], double **particle_siz
             double T = tl[layer];
             double P_layer = P[layer];
 
-            // Calculate particle sizes using microphysics
-            double r0, r1, r2, VP, v_sed, scale_height;
+            // Calculate cloud physics properties
+            double r0, r1, r2, VP, v_sed, scale_height, mass_per_particle, n_density;
 
             double Kzz_m2s =  KZZ * 1.0e-4; // Eddy diffusion coefficient [m²/s]
             
-            particlesizef_local(gravity, T, P_layer, meanmolecular[layer], species_id, Kzz_m2s, layer,
-                               &r0, &r1, &r2, &VP, &v_sed, &scale_height);
+            calculate_cloud_properties(gravity,
+                T, P_layer, meanmolecular[layer],
+                species_id, Kzz_m2s, layer,
+                &r0, &r1, &r2, &VP,
+                &v_sed, 
+                &scale_height,
+                &mass_per_particle,
+                &n_density);
             
-            // Store particle sizes for potential use elsewhere
-            particle_sizes[layer][i] = r2; // Use r2 (volume-weighted radius) for sedimentation
-            
+            // Store multiple particle properties for potential use elsewhere
+            // All values calculated once in particlesizef_local and stored for reuse
+            particle_r2[layer][i] = r2;              // r2: volume-weighted radius [μm]
+            particle_r0[layer][i] = r0;             // r0: nucleation/monomer radius [μm]
+            particle_VP[layer][i] = VP;             // VP: particle volume [cm³]
+            particle_mass[layer][i] = mass_per_particle; // mass per particle [kg]
+            particle_number_density[layer][i] = n_density; // particle number density [particles/m³]
+
+            // printf("layer: %d\n", layer);
+            // printf("r0: %.2e, r1: %.2e, r2: %.2e, VP: %.2e cm^3\n", r0, r1, r2, VP);
+            // printf("mass_per_particle: %.2e\n", mass_per_particle);
         }
     }
 
@@ -2549,11 +2561,11 @@ void exponential_cloud(double gravity, double P[], double **particle_sizes) {
             
             // Calculate particle properties using Hu+2019 physics
             double deltaP = 1.0e-12; // Small positive value for numerical stability
-            double r0, r1, r2, VP, v_sed_ms, scale_height;
+            double r0, r1, r2, VP, v_sed_ms, scale_height, mass_per_particle, n_density;
             
-            particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+            calculate_cloud_properties(gravity, tl[layer], pl[layer], meanmolecular[layer], 
                               species_id, Kzz_m2s, layer,
-                              &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                              &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height, &mass_per_particle, &n_density);
 
             
             // Calculate altitude difference from cloud bottom (dz in A&M)
@@ -2603,11 +2615,11 @@ void exponential_cloud(double gravity, double P[], double **particle_sizes) {
             if (clouds[layer][species_id] > 1.0e-20) {
                 // Calculate particle size using current cloud amount
                 double deltaP = 1.0e-12; // Small positive value for numerical stability
-                double r0, r1, r2, VP, v_sed_ms, scale_height;
+                double r0, r1, r2, VP, v_sed_ms, scale_height, mass_per_particle, n_density;
                 
-                particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
+                calculate_cloud_properties(gravity, tl[layer], pl[layer], meanmolecular[layer], 
                                   species_id, Kzz_m2s, layer,
-                                  &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
+                                  &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height, &mass_per_particle, &n_density);
                 
                 // Store volume-weighted radius (r2) in micrometers for plotting
                 particle_sizes[layer][i] = r2;

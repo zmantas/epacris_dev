@@ -39,7 +39,10 @@ extern int    ReactionR[NKin+1][7], ReactionM[NKinM+1][5], ReactionP[NPho+1][9],
 extern int    numx, numc, numf, numa, waternum, waterx, numr, numm, numt, nump;
 extern double xx[zbin+1][NSP+1];
 extern double mkv[], Tnew[], Pnew[];
-extern double clouds[zbin+1][NSP+1]; // Cloud abundances for condensible species
+extern double clouds[zbin+1][NSP+1]; // Cloud abundances for condensible species (number density) molecules cm^-3
+
+// Cloud optical property arrays for radiative transfer [layer][wavelength]
+extern double **cH2O, **aH2O, **gH2O;  // H2O cloud: cross-section (cm^-1), albedo, asymmetry g
 extern double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
 extern double MeanH2H2CIA[], MeanH2HeCIA[], MeanH2HCIA[], MeanN2H2CIA[], MeanN2N2CIA[],MeanCO2CO2CIA[];
 extern double SMeanH2H2CIA[], SMeanH2HeCIA[], SMeanH2HCIA[], SMeanN2H2CIA[], SMeanN2N2CIA[], SMeanCO2CO2CIA[];
@@ -55,7 +58,11 @@ extern int RTstepcount;
 extern double GA; // Gravitational acceleration
 
 // Enhanced cloud physics arrays
-extern double particle_radius_um[zbin+1][MAX_CONDENSIBLES];
+extern double particle_r2[zbin+1][MAX_CONDENSIBLES];
+extern double particle_r0[zbin+1][MAX_CONDENSIBLES];  // Mode radius (nucleation/monomer radius) [μm]
+extern double particle_VP[zbin+1][MAX_CONDENSIBLES];  // Particle volume [cm³]
+extern double particle_mass[zbin+1][MAX_CONDENSIBLES];  // Particle mass [kg]
+extern double particle_number_density[zbin+1][MAX_CONDENSIBLES]; // Particle number density [particles/m³]
 extern double fall_velocity_ms[zbin+1][MAX_CONDENSIBLES];
 extern double cloud_retention[zbin+1][MAX_CONDENSIBLES];
 
@@ -67,10 +74,9 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 
 // Cloud physics functions
 void apply_enhanced_cloud_physics(int layer, double gravity);
-void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes);
 void apply_equilibrium_cloud_distribution(double gravity);
 void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass);
-void particlesizef_local(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height);
+void calculate_cloud_properties(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height, double *mass_per_particle, double *n_density);
 
 // Global alpha storage functions
 void init_alpha_values();
@@ -91,6 +97,10 @@ extern void reinterpolate_all_opacities();
 // Cleanup functions
 extern void cleanup_opacity_cache(void);
 extern void cleanup_cia_cache();
+
+// Cloud optical property functions (from cloud_opticsH.c - LX-Mie format)
+extern void read_cloud_optical_tables_mie(void);
+extern void cleanup_cloud_optical_tables_mie(void);
 
 #endif /* !__GLOBAL_H__ */
 

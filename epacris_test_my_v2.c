@@ -10,7 +10,7 @@
 
 // Opacity species list
 const char* species[] = {
-    "H2O", "NH3", "CO2", "CO", "CH4",  "H2S",  "N2","OH"
+    "H2O"//, "NH3", "CO2", "CO", "CH4",  "H2S",  "N2","OH"
     //"C2H6", "CH2O2", "HNO3", "N2O","SO2","NO2", "NO","O2","O3", "OCS","HCN", "HO2", 
     //"C2H2", "C2H4", "H2CO", "H2O2"
 };
@@ -46,6 +46,7 @@ double **opacNH3;
 double **opacC2H2, **opacC2H4, **opacC2H6, **opacHCN, **opacCH2O2, **opacHNO3;
 double **opacN2O, **opacN2, **opacNO, **opacNO2, **opacOCS;
 double **opacHF, **opacHCl, **opacHBr, **opacHI, **opacClO, **opacHClO;
+double **cH2O, **aH2O, **gH2O;  // Cloud optical properties for H2O
 double **opacHBrO, **opacPH3, **opacCH3Cl, **opacCH3Br, **opacDMS, **opacCS2;
 double **cross, **crosst; //PhotoCross in Clima
 int *stdcross; //PhotoCross in Clima
@@ -69,7 +70,11 @@ double clouds[zbin+1][NSP+1] = {0.0}; //ms22: moist adiabat & clouds update
 double mkv[zbin+1], Tnew[zbin+1], Pnew[zbin+1];
 
 // Enhanced cloud physics arrays (defined here, declared as extern in cloud_physics_simple.h)
-double particle_radius_um[zbin+1][MAX_CONDENSIBLES];
+double particle_r2[zbin+1][MAX_CONDENSIBLES];
+double particle_r0[zbin+1][MAX_CONDENSIBLES];  // Mode radius (nucleation/monomer radius) [μm]
+double particle_VP[zbin+1][MAX_CONDENSIBLES];  // Particle volume [μm³]
+double particle_mass[zbin+1][MAX_CONDENSIBLES];  // Particle mass [kg]
+double particle_number_density[zbin+1][MAX_CONDENSIBLES]; // Particle number density [particles/m³]
 double fall_velocity_ms[zbin+1][MAX_CONDENSIBLES];
 double cloud_retention[zbin+1][MAX_CONDENSIBLES];
 
@@ -105,6 +110,7 @@ int CONDENSIBLES[MAX_CONDENSIBLES];
 #include "planckmeanCIA.c"
 #include "readcia.c"
 #include "readcross.c"
+#include "cloud_opticsH.c"
 #include "printout_std.c"
 #include "printout_std_t_exp.c"
 
@@ -897,6 +903,19 @@ printf("%s\n\n",fillmi);
     opacH2S = dmatrix(1,zbin,0,NLAMBDA-1);
     opacSO2 = dmatrix(1,zbin,0,NLAMBDA-1);
     opacOCS = dmatrix(1,zbin,0,NLAMBDA-1);
+    
+    // Allocate cloud optical property arrays for radiative transfer
+    cH2O = dmatrix(1,zbin,0,NLAMBDA-1);
+    aH2O = dmatrix(1,zbin,0,NLAMBDA-1);
+    gH2O = dmatrix(1,zbin,0,NLAMBDA-1);
+    // Initialize to zero (will be filled after cloud physics calculation)
+    for (j=1; j<=zbin; j++) {
+        for (i=0; i<NLAMBDA; i++) {
+            cH2O[j][i] = 0.0;
+            aH2O[j][i] = 1.0;
+            gH2O[j][i] = 0.0;
+        }
+    }
 
     printf("Reading CIA opacities\n");
     //cleanup_cia_cache(); // Clear any existing cache
@@ -905,6 +924,12 @@ printf("%s\n\n",fillmi);
     //Reading all opacity files
     printf("Reading all opacity files\n");
     read_all_opacities();
+    
+    // Read cloud optical property lookup tables (LX-Mie format)
+    printf("Reading Mie tables (LX-Mie format)\n");
+    read_cloud_optical_tables_mie();
+    
+
     //########################################################################################
 
 
@@ -1064,6 +1089,7 @@ printf("%s\n\n",fillmi);
     /* Clean up */
     cleanup_opacity_cache();  // Add this line before other cleanup
     cleanup_cia_cache();      // Clean up CIA opacity cache
+    cleanup_cloud_optical_tables_mie();  // Clean up cloud optical tables
     
     free_dmatrix(opacCO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacO2,1,zbin,0,NLAMBDA-1);
@@ -1088,6 +1114,11 @@ printf("%s\n\n",fillmi);
     free_dmatrix(opacH2S,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacSO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacOCS,1,zbin,0,NLAMBDA-1);
+    
+    // Free cloud optical property arrays
+    free_dmatrix(cH2O,1,zbin,0,NLAMBDA-1);
+    free_dmatrix(aH2O,1,zbin,0,NLAMBDA-1);
+    free_dmatrix(gH2O,1,zbin,0,NLAMBDA-1);
 
     /* Clean up */
     free_dmatrix(cross,1,nump,0,NLAMBDA-1);

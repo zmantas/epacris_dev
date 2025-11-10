@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include "constant.h"
 #include "global_temp.h"  // Include global variable declarations
+#include "cloud_opticsH.h"  // Cloud optical property functions
 #include "ms_functions.h"  // Contains filleq, fillmi, etc.
 #include "ludcmp.c"
 #include "lubksb.c"
@@ -448,14 +449,33 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 }
             }
 
+            printf("CLOUD ABUNDANCES:\n");
+            //print cloud abundances
+            for (j=1; j<=zbin; j++) {
+                for (k=1; k<=NSP; k++) {
+                    if (clouds[j][k] > 0.0) {
+                        printf("cloud[%d][%d] = %.6e\n", j, k, clouds[j][k]);
+                    }
+                }
+                printf("\n");
+            }
+            
 
             // Calculate cloud properties
             if (INCLUDE_CLOUD_PHYSICS == 0) {
                 // No cloud physics calculation
             } else if (INCLUDE_CLOUD_PHYSICS == 1) {
-                cloud_redistribution_none(GA, P, particle_sizes); // Calculate physics without redistribution
+                cloud_redistribution_none(GA, P); // Calculate physics without redistribution
             } else if (INCLUDE_CLOUD_PHYSICS == 2) {
                 exponential_cloud(GA, P, particle_sizes);
+            }
+            
+            // Calculate cloud optical properties from particle sizes and densities
+            // This interpolates Mie scattering data to RT wavelength grid
+            // Uses global arrays: clouds, particle_r2, particle_r0, particle_VP, particle_mass, wavelength
+            // Writes to global arrays: cH2O, aH2O, gH2O
+            if (cH2O != NULL && aH2O != NULL && gH2O != NULL) {
+                calculate_cloud_opacity_arrays();
             }
 
             ncl = 0;
