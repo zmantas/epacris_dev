@@ -1094,11 +1094,10 @@ void calculate_cloud_properties(double g, double T, double P, double mean_molecu
     // Calculate molecules per particle using the mass_per_particle output parameter
     double molecules_per_particle = (*mass_per_particle) / (molecular_mass_condensible * AMU_local);
     // Calculate particle number density [particles/m³]
-    // n_particles = n_molecules * m_molecule / m_particle
-    *n_density = clouds[layer][condensible_species_id] / molecules_per_particle;
-
-
-
+    // clouds[layer][condensible_species_id] is in molecules/cm³
+    // n_particles = n_molecules / molecules_per_particle gives particles/cm³
+    // Convert to particles/m³ by multiplying by 1e6 (1 m³ = 1e6 cm³)
+    *n_density = (clouds[layer][condensible_species_id] / molecules_per_particle) * 1.0e6;
     // Return the actual fall velocity and scale height
     *effective_settling_velocity = gravitational_settling; // [m/s] - actual fall velocity
     *scale_height = H; // [m]
@@ -1145,6 +1144,10 @@ void cloud_redistribution_none(double gravity, double P[]) {
             // Skip if no condensate in this layer - reset particle size
             if (clouds[layer][species_id] < 1.0e-20) {
                 particle_r2[layer][i] = 0.0;  // Reset when condensation stops
+                particle_r0[layer][i] = 0.0;
+                particle_VP[layer][i] = 0.0;
+                particle_mass[layer][i] = 0.0;
+                particle_number_density[layer][i] = 0.0;
                 continue;
             }
             

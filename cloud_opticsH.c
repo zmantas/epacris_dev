@@ -393,8 +393,6 @@ void calculate_cloud_opacity_arrays(void) {
     // Outputs: cH2O, aH2O, gH2O
     
     const double sig = 2.0;  // Lognormal distribution width parameter
-    const double rho_H2O_ice = 0.917;  // H2O ice density (g/cm³) - actual ice density
-    const double H2O_molecular_mass = 18.01528;  // H2O molecular mass (AMU)
     
     const int H2O_species_id = 7;  // H2O species ID
     
@@ -412,16 +410,10 @@ void calculate_cloud_opacity_arrays(void) {
         }
     }
     
-    // Is this necessary? Does this set to zero already in the original code?
+    // Check if H2O is in condensibles list
+    // Arrays are already initialized to zero in epacris_test_my_v2.c, so no need to zero here
     if (h2o_idx < 0) {
-        // H2O not in condensibles list - zero out arrays
-        for (int j = 1; j <= zbin; j++) {
-            for (int i = 0; i < NLAMBDA; i++) {
-                cH2O[j][i] = 0.0;
-                aH2O[j][i] = 1.0;
-                gH2O[j][i] = 0.0;
-            }
-        }
+        // H2O not in condensibles list - exit early (arrays already initialized to zero)
         free(ext_cross_interp);
         free(albedo_interp);
         free(asym_interp);

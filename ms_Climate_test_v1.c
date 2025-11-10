@@ -449,16 +449,16 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 }
             }
 
-            printf("CLOUD ABUNDANCES:\n");
-            //print cloud abundances
-            for (j=1; j<=zbin; j++) {
-                for (k=1; k<=NSP; k++) {
-                    if (clouds[j][k] > 0.0) {
-                        printf("cloud[%d][%d] = %.6e\n", j, k, clouds[j][k]);
-                    }
-                }
-                printf("\n");
-            }
+            // printf("CLOUD ABUNDANCES:\n");
+            // //print cloud abundances
+            // for (j=1; j<=zbin; j++) {
+            //     for (k=1; k<=NSP; k++) {
+            //         if (clouds[j][k] > 0.0) {
+            //             printf("cloud[%d][%d] = %.6e\n", j, k, clouds[j][k]);
+            //         }
+            //     }
+            //     printf("\n");
+            // }
             
 
             // Calculate cloud properties
