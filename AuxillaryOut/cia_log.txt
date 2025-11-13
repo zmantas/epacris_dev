@@ -306,3 +306,14 @@
 [2025-11-10 09:24:48] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
 [2025-11-10 09:52:18] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
 [2025-11-10 10:25:47] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 12:19:00] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 12:33:29] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 13:06:41] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 15:28:17] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 15:59:01] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 16:41:40] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 16:51:32] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-11 17:16:52] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-12 11:23:31] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-12 11:38:11] CIA data loaded - wavelength range: 100.00 to 200000.00 nm
+[2025-11-12 11:51:38] CIA data loaded - wavelength range: 100.00 to 200000.00 nm

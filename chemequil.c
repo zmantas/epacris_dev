@@ -61,8 +61,8 @@ void chemquil(double P[], double T[], int NL, int species[], int NS, double **mi
   fclose(file);
   
   // DEBUG: Print Fe abundance
-  printf("DEBUG: Fe abundance from file: %e (atom index %d)\n", b_j[20], 20);
-  printf("DEBUG: Fe abundance from file: %e (atom index %d)\n", b_j[21], 21);  
+  //printf("DEBUG: Fe abundance from file: %e (atom index %d)\n", b_j[20], 20);
+  //printf("DEBUG: Fe abundance from file: %e (atom index %d)\n", b_j[21], 21);  
   for (j=0; j<NATOMS; j++){
     if (b_j[j] < 1.0e-20)
       b_j[j] = 1.0e-20;

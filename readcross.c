@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "constant.h"
+#include "config.h"
+#include "nrutil.h"  // For f3tensor() and free_f3tensor()
+#include <stdio.h>
 
 #define MAX_SPECIES_CACHE 50  // Maximum number of species to cache
 
@@ -23,8 +26,9 @@ extern double tl[], pl[];  // External reference to temperature and pressure arr
 // Use CROSSHEADING_STR which is the string version of the CROSSHEADING macro
 extern char CROSSHEADING_STR[];  // External reference to opacity file path
 
-// Define NUM_SPECIES macro
-#define NUM_SPECIES (sizeof(species) / sizeof(species[0]))
+// NUM_SPECIES is defined in epacris_main.c where species[] is actually defined
+// Cannot use sizeof() on extern array declarations
+extern const int NUM_SPECIES;  // Number of opacity species
 
 // Function prototypes
 void readcross(char Fname[], double **xsc);
@@ -32,6 +36,8 @@ void reinterpolate_opacities_by_file(double **xsc, char Fname[]);
 void read_all_opacities();
 void cleanup_opacity_cache(void);
 void reinterpolate_all_opacities();
+// Forward declaration for Interpolation2D (defined in Interpolation.c)
+double Interpolation2D(double x, double y, double xx[], int nx, double yy[], int ny, double **data);
 
 // Simple structure to hold opacity data for one species
 typedef struct {
@@ -87,82 +93,55 @@ static OpacityFile* get_opacity_file(const char* filename) {
 	return &opacity_files[0];
 }
 
+// Helper function to get opacity array pointer for a species name
+// Returns NULL if species not found
+static double** get_opacity_array(const char *species_name) {
+	// Ordered by frequency of use - most common species checked first
+	if (strcmp(species_name, "H2O") == 0) return opacH2O;
+	if (strcmp(species_name, "CO2") == 0) return opacCO2;
+	if (strcmp(species_name, "O2") == 0) return opacO2;
+	if (strcmp(species_name, "CH4") == 0) return opacCH4;
+	if (strcmp(species_name, "CO") == 0) return opacCO;
+	if (strcmp(species_name, "NH3") == 0) return opacNH3;
+	if (strcmp(species_name, "N2") == 0) return opacN2;
+	if (strcmp(species_name, "SO2") == 0) return opacSO2;
+	if (strcmp(species_name, "H2S") == 0) return opacH2S;
+	if (strcmp(species_name, "OH") == 0) return opacOH;
+	if (strcmp(species_name, "H2CO") == 0) return opacH2CO;
+	if (strcmp(species_name, "H2O2") == 0) return opacH2O2;
+	if (strcmp(species_name, "HO2") == 0) return opacHO2;
+	if (strcmp(species_name, "O3") == 0) return opacO3;
+	if (strcmp(species_name, "OCS") == 0) return opacOCS;
+	if (strcmp(species_name, "C2H2") == 0) return opacC2H2;
+	if (strcmp(species_name, "C2H4") == 0) return opacC2H4;
+	if (strcmp(species_name, "C2H6") == 0) return opacC2H6;
+	if (strcmp(species_name, "CH2O2") == 0) return opacCH2O2;
+	if (strcmp(species_name, "HCN") == 0) return opacHCN;
+	if (strcmp(species_name, "HNO3") == 0) return opacHNO3;
+	if (strcmp(species_name, "N2O") == 0) return opacN2O;
+	if (strcmp(species_name, "NO") == 0) return opacNO;
+	if (strcmp(species_name, "NO2") == 0) return opacNO2;
+	return NULL;  // Species not found
+}
+
 // Read all opacities from the species list
 void read_all_opacities() {
 	char crossfile[1024];
+	double **opac_ptr;
 
-	printf("Reading opacities for %d species\n", (int)NUM_SPECIES); 
+	printf("Reading opacities for %d gas species\n", NUM_SPECIES); 
 	for (int i = 0; i < NUM_SPECIES; i++) {
 		strcpy(crossfile, CROSSHEADING_STR);
 		strcat(crossfile, "opac");
 		strcat(crossfile, species[i]);
 		strcat(crossfile, ".dat");
 		
-		// Use switch to map species name to correct variables
-		switch(species[i][0]) {
-			case 'C':
-				if (strcmp(species[i], "C2H2") == 0) {
-					readcross(crossfile, opacC2H2);
-				} else if (strcmp(species[i], "C2H4") == 0) {
-					readcross(crossfile, opacC2H4);
-				} else if (strcmp(species[i], "C2H6") == 0) {
-					readcross(crossfile, opacC2H6);
-				} else if (strcmp(species[i], "CH2O2") == 0) {
-					readcross(crossfile, opacCH2O2);
-				} else if (strcmp(species[i], "CH4") == 0) {
-					readcross(crossfile, opacCH4);
-				} else if (strcmp(species[i], "CO2") == 0) {
-					readcross(crossfile, opacCO2);
-				} else if (strcmp(species[i], "CO") == 0) {
-					readcross(crossfile, opacCO);
-				}
-				break;
-			case 'H':
-				if (strcmp(species[i], "H2CO") == 0) {
-					readcross(crossfile, opacH2CO);
-				} else if (strcmp(species[i], "H2O2") == 0) {
-					readcross(crossfile, opacH2O2);
-				} else if (strcmp(species[i], "H2O") == 0) {
-					readcross(crossfile, opacH2O);
-				} else if (strcmp(species[i], "H2S") == 0) {
-					readcross(crossfile, opacH2S);
-				} else if (strcmp(species[i], "HCN") == 0) {
-					readcross(crossfile, opacHCN);
-				} else if (strcmp(species[i], "HNO3") == 0) {
-					readcross(crossfile, opacHNO3);
-				} else if (strcmp(species[i], "HO2") == 0) {
-					readcross(crossfile, opacHO2);
-				}
-				break;
-			case 'N':
-				if (strcmp(species[i], "N2O") == 0) {
-					readcross(crossfile, opacN2O);
-				} else if (strcmp(species[i], "N2") == 0) {
-					readcross(crossfile, opacN2);
-				} else if (strcmp(species[i], "NH3") == 0) {
-					readcross(crossfile, opacNH3);
-				} else if (strcmp(species[i], "NO2") == 0) {
-					readcross(crossfile, opacNO2);
-				} else if (strcmp(species[i], "NO") == 0) {
-					readcross(crossfile, opacNO);
-				}
-				break;
-			case 'O':
-				if (strcmp(species[i], "O2") == 0) {
-					readcross(crossfile, opacO2);
-				} else if (strcmp(species[i], "O3") == 0) {
-					readcross(crossfile, opacO3);
-				} else if (strcmp(species[i], "OCS") == 0) {
-					readcross(crossfile, opacOCS);
-				} else if (strcmp(species[i], "OH") == 0) {
-					readcross(crossfile, opacOH);
-				}
-				break;
-			case 'S':
-				if (strcmp(species[i], "SO2") == 0) {
-					readcross(crossfile, opacSO2);
-				}
-				break;
+		// Get opacity array pointer for this species
+		opac_ptr = get_opacity_array(species[i]);
+		if (opac_ptr != NULL) {
+			readcross(crossfile, opac_ptr);
+		} else {
+			printf("Warning: No opacity array found for species %s\n", species[i]);
 		}
 	}
 }
@@ -185,85 +164,29 @@ void cleanup_opacity_cache(void) {
 }
 
 // Function to reinterpolate all opacities
+// Called every 10 RT steps to reinterpolate opacities as T/P change
 void reinterpolate_all_opacities() {
 	char crossfile[1024];
-	
+	double **opac_ptr;
+
 	for (int i = 0; i < NUM_SPECIES; i++) {
 		strcpy(crossfile, CROSSHEADING_STR);
 		strcat(crossfile, "opac");
 		strcat(crossfile, species[i]);
 		strcat(crossfile, ".dat");
 		
-		// Use switch to map species name to correct variables
-		switch(species[i][0]) {
-			case 'C':
-				if (strcmp(species[i], "C2H2") == 0) {
-					reinterpolate_opacities_by_file(opacC2H2, crossfile);
-				} else if (strcmp(species[i], "C2H4") == 0) {
-					reinterpolate_opacities_by_file(opacC2H4, crossfile);
-				} else if (strcmp(species[i], "C2H6") == 0) {
-					reinterpolate_opacities_by_file(opacC2H6, crossfile);
-				} else if (strcmp(species[i], "CH2O2") == 0) {
-					reinterpolate_opacities_by_file(opacCH2O2, crossfile);
-				} else if (strcmp(species[i], "CH4") == 0) {
-					reinterpolate_opacities_by_file(opacCH4, crossfile);
-				} else if (strcmp(species[i], "CO2") == 0) {
-					reinterpolate_opacities_by_file(opacCO2, crossfile);
-				} else if (strcmp(species[i], "CO") == 0) {
-					reinterpolate_opacities_by_file(opacCO, crossfile);
-				}
-				break;
-			case 'H':
-				if (strcmp(species[i], "H2CO") == 0) {
-					reinterpolate_opacities_by_file(opacH2CO, crossfile);
-				} else if (strcmp(species[i], "H2O2") == 0) {
-					reinterpolate_opacities_by_file(opacH2O2, crossfile);
-				} else if (strcmp(species[i], "H2O") == 0) {
-					reinterpolate_opacities_by_file(opacH2O, crossfile);
-				} else if (strcmp(species[i], "H2S") == 0) {
-					reinterpolate_opacities_by_file(opacH2S, crossfile);
-				} else if (strcmp(species[i], "HCN") == 0) {
-					reinterpolate_opacities_by_file(opacHCN, crossfile);
-				} else if (strcmp(species[i], "HNO3") == 0) {
-					reinterpolate_opacities_by_file(opacHNO3, crossfile);
-				} else if (strcmp(species[i], "HO2") == 0) {
-					reinterpolate_opacities_by_file(opacHO2, crossfile);
-				}
-				break;
-			case 'N':
-				if (strcmp(species[i], "N2O") == 0) {
-					reinterpolate_opacities_by_file(opacN2O, crossfile);
-				} else if (strcmp(species[i], "N2") == 0) {
-					reinterpolate_opacities_by_file(opacN2, crossfile);
-				} else if (strcmp(species[i], "NH3") == 0) {
-					reinterpolate_opacities_by_file(opacNH3, crossfile);
-				} else if (strcmp(species[i], "NO2") == 0) {
-					reinterpolate_opacities_by_file(opacNO2, crossfile);
-				} else if (strcmp(species[i], "NO") == 0) {
-					reinterpolate_opacities_by_file(opacNO, crossfile);
-				}
-				break;
-			case 'O':
-				if (strcmp(species[i], "O2") == 0) {
-					reinterpolate_opacities_by_file(opacO2, crossfile);
-				} else if (strcmp(species[i], "O3") == 0) {
-					reinterpolate_opacities_by_file(opacO3, crossfile);
-				} else if (strcmp(species[i], "OCS") == 0) {
-					reinterpolate_opacities_by_file(opacOCS, crossfile);
-				} else if (strcmp(species[i], "OH") == 0) {
-					reinterpolate_opacities_by_file(opacOH, crossfile);
-				}
-				break;
-			case 'S':
-				if (strcmp(species[i], "SO2") == 0) {
-					reinterpolate_opacities_by_file(opacSO2, crossfile);
-				}
-				break;
+		// Get opacity array pointer for this species (reuses optimized lookup)
+		opac_ptr = get_opacity_array(species[i]);
+		if (opac_ptr != NULL) {
+			reinterpolate_opacities_by_file(opac_ptr, crossfile);
 		}
+		// Silently skip if species not found (already warned in read_all_opacities)
 	}
 }
 
 // Main function to read opacity data for a specific file
+// Now opacities are cached in the OpacityFile structure
+// Does not need to be read in every time opacities are reinterpolated
 void readcross(char Fname[], double **xsc)
 {
 	int i, j, k;
@@ -368,7 +291,7 @@ void reinterpolate_opacities_by_file(double **xsc, char Fname[]) {
 	
 	if (!opac_file->is_loaded || !opac_file->opac) {
 		// If data not loaded, load it
-		readcross(Fname, xsc);
+		readcross(Fname, xsc); // Should never happen
 		return;
 	}
 

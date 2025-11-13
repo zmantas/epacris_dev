@@ -1,50 +1,54 @@
 /**
- * cloud_optics.h
+ * cloud_opticsH.h
  * 
- * Header file for cloud optical property lookup tables
- * Reads Mie scattering tables from Clouds/CrossP/ directory
+ * Header file for cloud optical property lookup tables from LX-Mie output
+ * Reads Mie scattering tables from Clouds/LXMieOuput/ directory
+ * Based on HELIOS clouds.py implementation
  * 
  * Tables structure:
- * - Row dimension: particle radius (41 rows)
- * - Column dimension: wavelength bins (NLAMBDA)
- * - Files: Cross (extinction), Albedo (single scattering), Geo (asymmetry parameter g)
+ * - Multiple files: one per particle size (r0.010000.dat, r0.012589.dat, etc.)
+ * - Each file: wavelength, extinction, scattering, absorption, albedo, asymmetry parameter g
+ * - Files contain particle radius in filename (rXXX.XXXXXX.dat)
  */
 
-#ifndef CLOUD_OPTICS_H
-#define CLOUD_OPTICS_H
+#ifndef CLOUD_OPTICSH_H
+#define CLOUD_OPTICSH_H
 
 #include "constant.h"
+// Forward declarations - actual definitions in global_temp.h
+extern int CONDENSIBLES[];
 
-// Number of particle size bins in lookup tables
-#define NPARTICLE_SIZES 41
+// Number of particle size bins in LX-Mie lookup tables (will be determined dynamically)
+// Typical range: ~0.01 to ~1000 microns, log-spaced
+#define MAX_PARTICLE_SIZES 100
 
-// Number of wavelengths in cloud optical property lookup tables
-// Note: This is DIFFERENT from NLAMBDA (radiative transfer grid)
-// Cloud tables have 1387 wavelengths, RT grid may have 16000
-#define NCLOUD_WAVELENGTHS 1387
+// Number of wavelengths in LX-Mie output files (will be determined from first file)
+#define MAX_MIE_WAVELENGTHS 1000
 
-// Cloud optical property data structures
+// Cloud optical property data structures (LX-Mie format)
 // Format: [particle_size_index][wavelength_index]
 typedef struct {
-    double radius[NPARTICLE_SIZES];                              // Particle radii in micrometers
-    double cross[NPARTICLE_SIZES][NCLOUD_WAVELENGTHS];          // Cross section (extinction)
-    double albedo[NPARTICLE_SIZES][NCLOUD_WAVELENGTHS];         // Single scattering albedo
-    double asym[NPARTICLE_SIZES][NCLOUD_WAVELENGTHS];           // Asymmetry parameter g
-} CloudOpticalTable;
+    int n_particle_sizes;                                      // Actual number of particle sizes found
+    int n_wavelengths;                                         // Actual number of wavelengths in files
+    double radius[MAX_PARTICLE_SIZES];                        // Particle radii in micrometers (from filename)
+    double wavelength[MAX_MIE_WAVELENGTHS];                   // Wavelengths in micrometers
+    double extinction_cross[MAX_PARTICLE_SIZES][MAX_MIE_WAVELENGTHS];  // Extinction cross section (cm²) - total = scattering + absorption
+    double albedo[MAX_PARTICLE_SIZES][MAX_MIE_WAVELENGTHS];           // Single scattering albedo
+    double asymmetry_g[MAX_PARTICLE_SIZES][MAX_MIE_WAVELENGTHS];       // Asymmetry parameter g
+} CloudOpticalTableMie;
 
-// Global optical property tables (defined in cloud_optics.c)
-extern CloudOpticalTable H2O_ice_optics;
-extern CloudOpticalTable H2O_liquid_optics;
-extern CloudOpticalTable NH3_ice_optics;
+// Global optical property tables (defined in cloud_opticsH.c)
+extern CloudOpticalTableMie H2O_mie_optics;
 
 // Function declarations
-void read_cloud_optical_tables(void);
-void cleanup_cloud_optical_tables(void);
+void read_cloud_optical_tables_mie(void);
+void cleanup_cloud_optical_tables_mie(void);
 
-// Future interpolation function (to be implemented in next step)
-// void get_cloud_opacity(int layer, int wavelength_idx, int species_id,
-//                        double particle_size_um,
-//                        double *extinction, double *albedo, double *asymmetry);
+// Calculate cloud opacity arrays for radiative transfer
+// Must be called after particle sizes are calculated (after cloud physics)
+// Uses global arrays: clouds, particle_r2, particle_r0, particle_VP, particle_mass, wavelength
+// Writes to global arrays: cH2O, aH2O, gH2O
+void calculate_cloud_opacity_arrays(void);
 
-#endif // CLOUD_OPTICS_H
+#endif // CLOUD_OPTICSH_H
 

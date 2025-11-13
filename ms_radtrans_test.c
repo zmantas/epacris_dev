@@ -294,9 +294,11 @@ for (i=0;i<=zbin;i++)
 			/* g[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i]*asym[1][i];
 			g[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]*asym[2][i]; */
             // H2O cloud asymmetry parameter
-            g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i]/MM[j1];
+            // Weighted mean: g = Σ(scattering_opacity × asymmetry) / Σ(scattering_opacity)
+            // cH2O*aH2O is scattering opacity (cm^-1), gH2O is asymmetry (dimensionless)
+            g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i];
 			// NH3 cloud (to be implemented later)
-			//g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i]/MM[j1];
+			//g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i];
 			if (ws[j] > 0.0) {
 				g[j] = g[j]/ws[j];
 			} else {

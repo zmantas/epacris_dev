@@ -42,12 +42,23 @@ Note: The parameters in this file can be modified to model different planets aro
                             // 4 = PTRANS-I pentadiagonal solver
                             // 5 = Sogabe 2008 pentadiagonal solver (Algorithms 2&3)
 
-#define INCLUDE_CLOUD_PHYSICS 1 // 0 = no cloud physics
+#define INCLUDE_CLOUD_PHYSICS 0 // 0 = no cloud physics
                                 // 1 = cloud physics; no redistribution
                                 // 2 = forced cloud redistribution; exponential
 #define DELTA_P 1.0e-12 // Small supersaturation for particle sizing
 
 #define ENABLE_COLD_TRAP  1  // 0 = disabled, 1 = enabled (dynamically detects based on condensation)
+
+#define CLOUD_DEBUG 0  // 0 = disable cloud optics debugging output
+                       // 1 = enable detailed cloud optics interpolation debugging
+
+// Opacity species list - used to read opacity files
+#define OPACITY_SPECIES_LIST \
+    "H2O", "NH3", "CO2", "CO", "CH4", \
+    "H2S", "N2", "OH", "C2H6", "CH2O2", \
+    "HNO3", "N2O", "SO2", "NO2", "NO", \
+    "O2", "O3", "OCS", "HCN", "HO2", \
+    "C2H2", "C2H4", "H2CO", "H2O2"
 
 //--------------------------------------------------------------------- 
 /* Initial Concentration Setting */
@@ -63,7 +74,7 @@ Note: The parameters in this file can be modified to model different planets aro
 
 /* Iteration Conditions */
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     10       /* Maximum Radiative - Convective Iterations, minimum 1 */
+#define NMAX_RC     1       /* Maximum Radiative - Convective Iterations, minimum 1 */
 #define NMAX_RT     500  /* Maximum Radiative Transfer Iterations */
 #define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 #define PRINT_ITER  100  //x steps to print parameters

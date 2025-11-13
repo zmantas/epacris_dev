@@ -1,12 +1,17 @@
 /*Function to read in collision-induce absorption cross section data */
 /* output opacity in cm+5 */
 /* Interpolation to specified temperature in each layer */
+// Function is setup to hold opacities in cache for reinterpolation during the run
 
-#include <math.h>
-#include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include "constant.h"
+#include "config.h"
+#include <stdio.h>
+#include "global_temp.h"
+#include "nrutil.h"
+#include "routine.h"
+
+// Forward declaration for Interpolation2D (defined in Interpolation.c)
+double Interpolation2D(double x, double y, double xx[], int nx, double yy[], int ny, double **data);
 
 // Simple CIA file structure
 typedef struct {
@@ -45,19 +50,7 @@ static CIAFile* get_cia_file(const char* pair_name) {
 	return NULL;
 }
 
-// Simple logging function
-static void log_cia_message(const char* message) {
-	FILE *log_file = fopen("AuxillaryOut/cia_log.txt", "a");
-	if (log_file != NULL) {
-		// Get current time
-		time_t now = time(NULL);
-		char time_str[100];
-		strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&now));
-		
-		fprintf(log_file, "[%s] %s\n", time_str, message);
-		fclose(log_file);
-	}
-}
+
 
 // Main function to read CIA data
 void readcia() {
@@ -68,7 +61,6 @@ void readcia() {
 	char crossfile[1024];
 	double tfitting[zbin+1];
 	char dataline[10000];
-	char log_msg[1024];
 	
 	// Temperature fitting for each layer
 	for (i=1; i<=zbin; i++) {
@@ -86,78 +78,96 @@ void readcia() {
 	// Process each CIA pair
 	// H2-H2 CIA data
 	CIAFile* h2h2_file = get_cia_file("H2-H2");
-	if (!h2h2_file->loaded) {
-		strcpy(crossfile, CROSSHEADING);
-		strcat(crossfile, "H2-H2_CIA.dat");
-		strcpy(h2h2_file->filename, crossfile);
-		printf("Reading CIA file: %s\n", crossfile);
-		
-		fim = fopen(crossfile, "r");
-		if (fim == NULL) {
-			printf("Warning: Could not open CIA file: %s\n", crossfile);
-			// Initialize with zeros if file not found
-			for (i=1; i<=zbin; i++) {
-				for (j=0; j<NLAMBDA; j++) {
-					H2H2CIA[i][j] = 0.0;
+	if (h2h2_file == NULL) {
+		printf("Error: H2-H2 CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				H2H2CIA[i][j] = 0.0;
+			}
+		}
+	} else {
+		if (!h2h2_file->loaded) {
+			strcpy(crossfile, CROSSHEADING);
+			strcat(crossfile, "H2-H2_CIA.dat");
+			strcpy(h2h2_file->filename, crossfile);
+			printf("Reading CIA file: %s\n", crossfile);
+			
+			fim = fopen(crossfile, "r");
+			if (fim == NULL) {
+				printf("Warning: Could not open CIA file: %s\n", crossfile);
+				// Initialize with zeros if file not found
+				for (i=1; i<=zbin; i++) {
+					for (j=0; j<NLAMBDA; j++) {
+						H2H2CIA[i][j] = 0.0;
+					}
 				}
+			} else {
+				s = LineNumber(fim, 20000);  // Increased buffer for larger files
+				fclose(fim);
+				nl = s-1;
+				h2h2_file->num_lines = nl;
+				
+				// Allocate matrix and read data
+				cia = dmatrix(0, nl-1, 0, 19);
+				fim = fopen(crossfile, "r");
+				temp1 = fgets(dataline, 10000, fim); /* Read in the header line */
+				
+				for (i=0; i<nl; i++) {
+					fscanf(fim, "%lf", &h2h2_file->wavelength[i]);
+					for (j=0; j<19; j++) {
+						fscanf(fim, "%le", &cia[i][j]);
+					}
+					fscanf(fim, "%le\n", &cia[i][19]);
+				}
+				fclose(fim);
+				
+				// Save to cache and calculate cross sections
+				h2h2_file->data = cia;
+				h2h2_file->loaded = 1;
+				
+				for (i=1; i<=zbin; i++) {
+					for (j=0; j<NLAMBDA; j++) {
+						H2H2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i], 
+										 h2h2_file->wavelength, nl, temp, 20, cia);
+					}
+				}
+				
+				// Write debug output
+				fout = fopen("AuxillaryOut/CheckCIA_H2H2.dat", "w");
+				for (j=0; j<NLAMBDA; j++) {
+					fprintf(fout, "%2.6f\t", wavelength[j]);
+					for (i=1; i<=zbin; i++) {
+						fprintf(fout, "%2.6e\t", H2H2CIA[i][j]);
+					}
+					fprintf(fout, "\n");
+				}
+				fclose(fout);
 			}
 		} else {
-			s = LineNumber(fim, 20000);  // Increased buffer for larger files
-			fclose(fim);
-			nl = s-1;
-			h2h2_file->num_lines = nl;
-			
-			// Allocate matrix and read data
-			cia = dmatrix(0, nl-1, 0, 19);
-			fim = fopen(crossfile, "r");
-			temp1 = fgets(dataline, 10000, fim); /* Read in the header line */
-			
-			for (i=0; i<nl; i++) {
-				fscanf(fim, "%lf", &h2h2_file->wavelength[i]);
-				for (j=0; j<19; j++) {
-					fscanf(fim, "%le", &cia[i][j]);
-				}
-				fscanf(fim, "%le\n", &cia[i][19]);
-			}
-			fclose(fim);
-			
-			// Save to cache and calculate cross sections
-			h2h2_file->data = cia;
-			h2h2_file->loaded = 1;
-			
+			printf("Using cached data for H2-H2 CIA\n");
+			// Recalculate using cached data
 			for (i=1; i<=zbin; i++) {
 				for (j=0; j<NLAMBDA; j++) {
 					H2H2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i], 
-									 h2h2_file->wavelength, nl, temp, 20, cia);
+									h2h2_file->wavelength, h2h2_file->num_lines, 
+									temp, 20, h2h2_file->data);
 				}
-			}
-			
-			// Write debug output
-			fout = fopen("AuxillaryOut/CheckCIA_H2H2.dat", "w");
-			for (j=0; j<NLAMBDA; j++) {
-				fprintf(fout, "%2.6f\t", wavelength[j]);
-				for (i=1; i<=zbin; i++) {
-					fprintf(fout, "%2.6e\t", H2H2CIA[i][j]);
-				}
-				fprintf(fout, "\n");
-			}
-			fclose(fout);
-		}
-	} else {
-		printf("Using cached data for H2-H2 CIA\n");
-		// Recalculate using cached data
-		for (i=1; i<=zbin; i++) {
-			for (j=0; j<NLAMBDA; j++) {
-				H2H2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i], 
-								h2h2_file->wavelength, h2h2_file->num_lines, 
-								temp, 20, h2h2_file->data);
 			}
 		}
 	}
 	
 	// H2-He CIA data
 	CIAFile* h2he_file = get_cia_file("H2-He");
-	if (!h2he_file->loaded) {
+	if (h2he_file == NULL) {
+		printf("Error: H2-He CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				H2HeCIA[i][j] = 0.0;
+			}
+		}
+	} else if (!h2he_file->loaded) {
 		strcpy(crossfile, CROSSHEADING);
 		strcat(crossfile, "H2-He_CIA.dat");
 		strcpy(h2he_file->filename, crossfile);
@@ -225,7 +235,15 @@ void readcia() {
 	
 	// H2-H CIA data
 	CIAFile* h2h_file = get_cia_file("H2-H");
-	if (!h2h_file->loaded) {
+	if (h2h_file == NULL) {
+		printf("Error: H2-H CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				H2HCIA[i][j] = 0.0;
+			}
+		}
+	} else if (!h2h_file->loaded) {
 		strcpy(crossfile, CROSSHEADING);
 		strcat(crossfile, "H2-H_CIA.dat");
 		strcpy(h2h_file->filename, crossfile);
@@ -292,7 +310,15 @@ void readcia() {
 	
 	// N2-N2 CIA data
 	CIAFile* n2n2_file = get_cia_file("N2-N2");
-	if (!n2n2_file->loaded) {
+	if (n2n2_file == NULL) {
+		printf("Error: N2-N2 CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				N2N2CIA[i][j] = 0.0;
+			}
+		}
+	} else if (!n2n2_file->loaded) {
 		strcpy(crossfile, CROSSHEADING);
 		strcat(crossfile, "N2-N2_CIA.dat");
 		strcpy(n2n2_file->filename, crossfile);
@@ -359,7 +385,15 @@ void readcia() {
 	
 	// N2-H2 CIA data
 	CIAFile* n2h2_file = get_cia_file("N2-H2");
-	if (!n2h2_file->loaded) {
+	if (n2h2_file == NULL) {
+		printf("Error: N2-H2 CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				N2H2CIA[i][j] = 0.0;
+			}
+		}
+	} else if (!n2h2_file->loaded) {
 		strcpy(crossfile, CROSSHEADING);
 		strcat(crossfile, "N2-H2_CIA.dat");
 		strcpy(n2h2_file->filename, crossfile);
@@ -426,7 +460,15 @@ void readcia() {
 	
 	// CO2-CO2 CIA data
 	CIAFile* co2co2_file = get_cia_file("CO2-CO2");
-	if (!co2co2_file->loaded) {
+	if (co2co2_file == NULL) {
+		printf("Error: CO2-CO2 CIA file structure not found - skipping and initializing to zeros\n");
+		// Initialize with zeros and continue processing other species
+		for (i=1; i<=zbin; i++) {
+			for (j=0; j<NLAMBDA; j++) {
+				CO2CO2CIA[i][j] = 0.0;
+			}
+		}
+	} else if (!co2co2_file->loaded) {
 		strcpy(crossfile, CROSSHEADING);
 		strcat(crossfile, "CO2-CO2_CIA.dat");
 		strcpy(co2co2_file->filename, crossfile);
@@ -491,16 +533,6 @@ void readcia() {
 		}
 	}
 	
-	printf("CIA data loading complete\n");
-	
-	// Log completion
-	sprintf(log_msg, "CIA data loaded - wavelength range: %.2f to %.2f nm", 
-		   wavelength[0], wavelength[NLAMBDA-1]);
-	log_cia_message(log_msg);
-	
-	// Print wavelength range information 
-	printf("Wavelength range for interpolation: %.2f to %.2f nm\n", 
-		   wavelength[0], wavelength[NLAMBDA-1]);
 }
 
 // Reinterpolate CIA opacities for new temperature profile
@@ -516,11 +548,10 @@ void reinterpolate_cia() {
 		if (tfitting[i] < 100.0) tfitting[i] = 100.0;
 	}
 	
-	//printf("Reinterpolating CIA opacities...\n");
 	
 	// Get each CIA file and reinterpolate if loaded
 	CIAFile* h2h2_file = get_cia_file("H2-H2");
-	if (h2h2_file->loaded && h2h2_file->data) {
+	if (h2h2_file != NULL && h2h2_file->loaded && h2h2_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				H2H2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -538,7 +569,7 @@ void reinterpolate_cia() {
 	}
 	
 	CIAFile* h2he_file = get_cia_file("H2-He");
-	if (h2he_file->loaded && h2he_file->data) {
+	if (h2he_file != NULL && h2he_file->loaded && h2he_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				H2HeCIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -556,7 +587,7 @@ void reinterpolate_cia() {
 	}
 	
 	CIAFile* h2h_file = get_cia_file("H2-H");
-	if (h2h_file->loaded && h2h_file->data) {
+	if (h2h_file != NULL && h2h_file->loaded && h2h_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				H2HCIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -574,7 +605,7 @@ void reinterpolate_cia() {
 	}
 	
 	CIAFile* n2n2_file = get_cia_file("N2-N2");
-	if (n2n2_file->loaded && n2n2_file->data) {
+	if (n2n2_file != NULL && n2n2_file->loaded && n2n2_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				N2N2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -592,7 +623,7 @@ void reinterpolate_cia() {
 	}
 	
 	CIAFile* n2h2_file = get_cia_file("N2-H2");
-	if (n2h2_file->loaded && n2h2_file->data) {
+	if (n2h2_file != NULL && n2h2_file->loaded && n2h2_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				N2H2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -610,7 +641,7 @@ void reinterpolate_cia() {
 	}
 	
 	CIAFile* co2co2_file = get_cia_file("CO2-CO2");
-	if (co2co2_file->loaded && co2co2_file->data) {
+	if (co2co2_file != NULL && co2co2_file->loaded && co2co2_file->data) {
 		for (i=1; i<=zbin; i++) {
 			for (j=0; j<NLAMBDA; j++) {
 				CO2CO2CIA[i][j] = Interpolation2D(wavelength[j], tfitting[i],
@@ -635,7 +666,7 @@ void cleanup_cia_cache() {
 	printf("Cleaning up CIA opacity cache...\n");
 	
 	CIAFile* h2h2_file = get_cia_file("H2-H2");
-	if (h2h2_file->loaded && h2h2_file->data) {
+	if (h2h2_file != NULL && h2h2_file->loaded && h2h2_file->data) {
 		free_dmatrix(h2h2_file->data, 0, h2h2_file->num_lines-1, 0, 19);
 		h2h2_file->data = NULL;
 		h2h2_file->loaded = 0;
@@ -644,7 +675,7 @@ void cleanup_cia_cache() {
 	}
 	
 	CIAFile* h2he_file = get_cia_file("H2-He");
-	if (h2he_file->loaded && h2he_file->data) {
+	if (h2he_file != NULL && h2he_file->loaded && h2he_file->data) {
 		free_dmatrix(h2he_file->data, 0, h2he_file->num_lines-1, 0, 19);
 		h2he_file->data = NULL;
 		h2he_file->loaded = 0;
@@ -653,7 +684,7 @@ void cleanup_cia_cache() {
 	}
 	
 	CIAFile* h2h_file = get_cia_file("H2-H");
-	if (h2h_file->loaded && h2h_file->data) {
+	if (h2h_file != NULL && h2h_file->loaded && h2h_file->data) {
 		free_dmatrix(h2h_file->data, 0, h2h_file->num_lines-1, 0, 19);
 		h2h_file->data = NULL;
 		h2h_file->loaded = 0;
@@ -662,7 +693,7 @@ void cleanup_cia_cache() {
 	}
 	
 	CIAFile* n2n2_file = get_cia_file("N2-N2");
-	if (n2n2_file->loaded && n2n2_file->data) {
+	if (n2n2_file != NULL && n2n2_file->loaded && n2n2_file->data) {
 		free_dmatrix(n2n2_file->data, 0, n2n2_file->num_lines-1, 0, 19);
 		n2n2_file->data = NULL;
 		n2n2_file->loaded = 0;
@@ -671,7 +702,7 @@ void cleanup_cia_cache() {
 	}
 	
 	CIAFile* n2h2_file = get_cia_file("N2-H2");
-	if (n2h2_file->loaded && n2h2_file->data) {
+	if (n2h2_file != NULL && n2h2_file->loaded && n2h2_file->data) {
 		free_dmatrix(n2h2_file->data, 0, n2h2_file->num_lines-1, 0, 19);
 		n2h2_file->data = NULL;
 		n2h2_file->loaded = 0;
@@ -680,7 +711,7 @@ void cleanup_cia_cache() {
 	}
 	
 	CIAFile* co2co2_file = get_cia_file("CO2-CO2");
-	if (co2co2_file->loaded && co2co2_file->data) {
+	if (co2co2_file != NULL && co2co2_file->loaded && co2co2_file->data) {
 		free_dmatrix(co2co2_file->data, 0, co2co2_file->num_lines-1, 0, 19);
 		co2co2_file->data = NULL;
 		co2co2_file->loaded = 0;
