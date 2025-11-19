@@ -968,22 +968,30 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     }
     
     printf("%s\n",fillmi); 
-    printf("=== Running radiative-covective solver ===\n Sit back and enjoy :))\n");
-    
+    printf("%s\n",fillmi); 
+    printf("=== Running radiative-covective solver ===\n========= Sit back and enjoy :) ==========\n");
+    printf("%s\n",fillmi); 
+    printf("%s\n",fillmi); 
     // Start timing for radiative solver
     if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET); 
     
     // !!! CALLING THE MAIN CLIMATE SOLVER !!!
     if(RadConv_Solver == 1) {
-        ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,0); //ms22: 2stream switch added, NMAX iteration 0
+        ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,0);
         for (j=0; j<=zbin; j++) Tnew[j]=tempeq[j];
     }
+
 //**************************************************************
-    /* Iteration */
+    /* Iteraing further with NMAX iters full Climate-Chemistry solver
+    Only necessary if large chemistry changes are expected, 1 iteration is normally sufficient */
 //**************************************************************
-    for (i=0; i<NMAX; i++) {
+    for (i=0; i<NMAX; i++) { //Climate-Chemistry solver iteration
         
-        /* Determine if converged */
+        printf("%s\n",fillmi); 
+        printf("Climate-Chemistry solver iteration %d\n", i+1);
+        printf("%s\n",fillmi); 
+
+        /* Determine if converged with temperature variation tolerance of 1 K */
         TVARTOTAL = 0.0;
         for (j=0; j<=zbin; j++) {
             TVARTOTAL += fabs(Tnew[j] - T[j]);
@@ -992,7 +1000,7 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
         printf("%s %f %s\n", "Temperature variation is ", TVARTOTAL, "K");
         
         /* Check convergence */
-        if (TVARTOTAL<1.0) {
+        if (TVARTOTAL<TVARTOTAL_TOL) {
             printf("%s\n", "EPACRIS converged!");
             /* fprintf(fstat,"%s\n", "converged!");*/
             printout_std_t(z,outstdt);

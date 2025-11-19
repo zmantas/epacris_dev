@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # Get all the files in the Results directory
 results_dir = 'Results/K2-18b/'
-cases = ['cloud_test_on', 'cloud_test_off']
+cases = ['cloud_test_on_nmax_rc_1', 'cloud_test_off_nmax_rc_1']
 tp_file_extension = 'NewTemperature.dat'
 
 # Plot the TP profiles
@@ -26,5 +26,5 @@ plt.yscale('log')
 plt.ylim(1e-8, 1e3)
 plt.gca().invert_yaxis()
 plt.grid(False)
-plt.savefig('TP_profile.png')
+plt.savefig('TP_profile_v2_test.png')
 #plt.show()

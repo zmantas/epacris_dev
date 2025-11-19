@@ -17,6 +17,7 @@
 #include "ms_2stream_test.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
 #include "toon_2stream.c" //ms: solving for radiative fluxes using Toon+89
 #include "mm_2stream.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
+#include "config.h"
 
 void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[], double *radiationI0_out, double *radiationI1_out, double *radiationO_out);
 
@@ -252,8 +253,10 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
             // H2O cloud: absorption and scattering
             // cH2O is already multiplied by number density (particles/m³)
             // and is in units of cm^-1 (extinction coefficient), so no need to adjust
+            // *** Assymetry factor (g) is below 30 lines below ***
             wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i]); //portion is reflected with albedo
-            ws[j] += cH2O[j1][i]*aH2O[j1][i]; //portion is scattered with albedo
+            ws[j] += cH2O[j1][i]*aH2O[j1][i];
+
             // NH3 cloud (to be implemented later)
             //wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i])/MM[j1];
             //ws[j] += cNH3[j1][i]*aNH3[j1][i]/MM[j1];
@@ -276,29 +279,34 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 
         }
 		
-/*printf("%s\n","\n==== w_0 ===="); //template
-for (i=0;i<=zbin;i++)
-{
-    printf("%s %d\t%.3e\n","w_0 ",i,w[i]);
-}*/
-		/* Asymmetry Factor */
-/* +++ OJO +++++++++++++++++++++++++++++++++++++++++++++++
- * ms_two_str can deal with scattering of larger molecules. 
- * g0 needs to be calculated consistently (so does ws above)
- *+++ To be addressed ++++++++++++++++++++++++++++++++++++*/
+        /*printf("%s\n","\n==== w_0 ===="); //template
+        for (i=0;i<=zbin;i++)
+        {
+            printf("%s %d\t%.3e\n","w_0 ",i,w[i]);
+        }*/
+                /* Asymmetry Factor */
+        /* +++ OJO +++++++++++++++++++++++++++++++++++++++++++++++
+        * ms_two_str can deal with scattering of larger molecules. 
+        * g0 needs to be calculated consistently (so does ws above)
+        *+++ To be addressed ++++++++++++++++++++++++++++++++++++*/
                 tau[0] = 0.0;    //ms2022: just to make sure
                 TAUdoub[0] = 0.0; //ms2023: double grid
 		for (j=1; j <= zbin; j++) {
 			g[j] = 0.0; 
 			j1   = zbin+1-j;
+
+            // Old Marcus dust asymmetry parameter?
 			/* g[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i]*asym[1][i];
 			g[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]*asym[2][i]; */
+
             // H2O cloud asymmetry parameter
             // Weighted mean: g = Σ(scattering_opacity × asymmetry) / Σ(scattering_opacity)
             // cH2O*aH2O is scattering opacity (cm^-1), gH2O is asymmetry (dimensionless)
             g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i];
+
 			// NH3 cloud (to be implemented later)
 			//g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i];
+
 			if (ws[j] > 0.0) {
 				g[j] = g[j]/ws[j];
 			} else {
@@ -343,18 +351,7 @@ for (i=0;i<=zbin;i++)
 //========================================================   
 //DEBUGG    printf("%s\n","Wavelength-loop DONE");
 
-#if DIRECT_BEAM_MODE == 1
-    // Direct beam mode: use zenith angle
-    double cos_zenith = cos(THETAREF);
-    for (i=0; i<(NLAMBDA-1); i++) {
-        double lambda1 = wavelength[i];
-        double lambda2 = wavelength[i+1];
-        double dlambda = lambda2 - lambda1;
-        double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);
-        radiationI0 += solar_flux_avg * dlambda * cos_zenith;
-    }
-#else
-    // Diffuse mode: use redistribution factor
+    // Calculate TOA incoming stellar flux (matches 2-stream solver: muD[1]*ffrac[1]*solar = FADV*solar)
     for (i=0; i<(NLAMBDA-1); i++) {
         double lambda1 = wavelength[i];
         double lambda2 = wavelength[i+1];
@@ -362,7 +359,6 @@ for (i=0;i<=zbin;i++)
         double solar_flux_avg = 0.5 * (solar[i] + solar[i+1]);
         radiationI0 += solar_flux_avg * dlambda * FADV;
     }
-#endif
 
 // Energy balance: F_out = F_absorbed_stellar + F_internal
 // Stellar absorption controlled by FaintSun parameter in main code
@@ -452,9 +448,10 @@ if(!TIME_STEPPING)
     ludcmp(jmax,nrl+1,indx,&ddd); 
     lubksb(jmax,nrl+1,indx,deltaT);
     
-    for (j=0; j<=nrl; j++) {
-        printf("%s %d %.3e\n","deltaT ",j+1,deltaT[j+1]);
-    } 
+    // Print deltaT for jacobian solver
+    // for (j=0; j<=nrl; j++) {
+    //     printf("%s %d %.3e\n","deltaT ",j+1,deltaT[j+1]);
+    // } 
     
     /* calculate the new temperature profile */
     radcount = 0;
@@ -466,7 +463,7 @@ if(!TIME_STEPPING)
             radcount = radcount+1;
             relaxationfactor=fmin(relaxationfactor,DT_MAX*Tvar[k][0]/fabs(deltaT[radcount+1])); /* do not allow temperature to change more than xx% */
             relaxfvector[radcount+1]=fmin(R_RELAX,DT_MAX*Tvar[k][0]/fabs(deltaT[radcount+1])); /* do not allow temperature to change more than xx% */
-            printf("%s\t%f\n", "Relaxation factor is", relaxationfactor);
+            //printf("%s\t%f\n", "Relaxation factor is", relaxationfactor);
         }
     }
     for (j=1; j<=nrl+1; j++) {
@@ -521,7 +518,7 @@ if (TS_SCHEME == 0){
         drflux[j] = Fup[j-1]-Fdn[j-1]-Fup[j]+Fdn[j];
         drfluxmax = fmax(drfluxmax,fabs(drflux[j]) );
     }
-    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
+    //if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
     if (RTstepcount==1) rt_drfluxmax_init=drfluxmax;//ms: let's scale things as a ratio to initial fluxes
 
     for (j=1; j<zbin; j++)//surface treatment included
@@ -558,10 +555,10 @@ if (TS_SCHEME == 1){
     }
     drflux[zbin] = NetFlux[zbin-1][0] - SIGMA*pow(Tint,4.0) ; //Surface "layer" separately
     drfluxmax = fmax(drfluxmax,fabs(drflux[zbin]));
-    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
+    //if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dRFLUX_max= ",drfluxmax);
     dcflux[zbin] = Fcup[zbin]-Fcdn[zbin] - SIGMA*pow(Tint,4.0) ; //Surface "layer" separately
     dcfluxmax = fmax(dcfluxmax,fabs(dcflux[zbin]));
-    if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dcFLUX_max= ",dcfluxmax);
+    //if (RTstepcount % PRINT_ITER == 0) printf("%s %.3e\n","dcFLUX_max= ",dcfluxmax);
     if (RTstepcount==1) rt_drfluxmax_init=drfluxmax;//ms: let's store in case we need it
 
     for (j=1; j<=zbin; j++)
@@ -622,7 +619,6 @@ if (TS_SCHEME == 1){
     
     /*printf("%s\t%f\n", "Top-of-Atmosphere incoming radiation flux is", radiationI0);
     printf("%s\t%f\n", "Bottom-of-Atmospehre incoming radiation flux is", radiationI1);*/
-    if (iter % PRINT_ITER == 0) printf("%s\t%f\n", "TOA outgoing net radiation flux is", radiationO);
     
     // Energy balance diagnostics
     if (iter % PRINT_ITER == 0 && TWO_STR_SOLVER >= 1) {
@@ -630,13 +626,14 @@ if (TS_SCHEME == 1){
         double internal_flux = SIGMA * pow(Tint, 4.0);
         double energy_balance = radiationO - absorbed_stellar - internal_flux;
         
+        printf("=======================================================\n");
+        printf("Diagnostic from the ms_radtrans_test.c file:\n");
         printf("Energy Balance Check:\n");
         printf("  Absorbed stellar:     %.2e W/m2\n", absorbed_stellar);
         printf("  Internal heat:        %.2e W/m2\n", internal_flux);
-        printf("  TOA outgoing:         %.2e W/m2\n", radiationO);
+        printf("  TOA net outgoing:     %.2e W/m2\n", radiationO);
         printf("  Energy imbalance:     %.2e W/m2\n", energy_balance);
-        printf("  Relative error:       %.2e\n", energy_balance / (absorbed_stellar + internal_flux));
-        printf("======================\n");
+        printf("=======================================================\n");
     }
     
     // Return radiation flux values for diagnostics

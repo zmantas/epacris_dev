@@ -23,6 +23,11 @@ extern void reinterpolate_all_cia_opacities();
 extern void reinterpolate_all_opacities();
 
 
+// Helper macro: Print diagnostics every step for jacobian solver (TIME_STEPPING==0), 
+// otherwise every PRINT_ITER steps
+#define SHOULD_PRINT_DIAG(step_count) \
+    ((TIME_STEPPING == 0) ? 1 : ((step_count) % PRINT_ITER == 0))
+
 // Function to check radiative transfer convergence
 typedef struct {
     bool flux_converged;
@@ -266,7 +271,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             
             // DYNAMIC CONDENSATION DETECTION - refresh every NRT_RC steps during radiative transfer
             if (CONDENSATION_MODE == 1 || CONDENSATION_MODE == 2) {
-                if (CONDENSATION_TIMING == 1 || (CONDENSATION_TIMING == 2 && total_step_count % PRINT_ITER == 0)) {
+                if (CONDENSATION_TIMING == 1 || (CONDENSATION_TIMING == 2 && SHOULD_PRINT_DIAG(total_step_count))) {
                     int old_ncondensibles = NCONDENSIBLES;
                     //printf("\n=== RT STEP %d: DYNAMIC CONDENSATION DETECTION ===\n", RTstepcount);
                     detect_condensibles_atmosphere();
@@ -282,7 +287,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             
             
                     // Live plotting during radiative transfer
-        if ((i == 1 && RTstepcount % PRINT_ITER == 0) || (i > 1 && RTstepcount % PRINT_ITER == 0)) {
+        if ((i == 1 && SHOULD_PRINT_DIAG(RTstepcount)) || (i > 1 && SHOULD_PRINT_DIAG(total_step_count))) {
             char rt_diag[512];
             sprintf(rt_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e", 
                     RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO);
@@ -343,12 +348,14 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // Check convergence conditions
             status = check_rt_convergence(Rfluxmax, dRfluxmax, Tint, Tol_RC, Tol_RC_R, radiationO);
             
-            // DIAGNOSTIC: Print convergence info every 50 steps
-            if ((i == 1 && RTstepcount % PRINT_ITER == 0) || (i > 1 && total_step_count % PRINT_ITER == 0)) {
+            // DIAGNOSTIC: Print convergence info every step for jacobian solver, otherwise every PRINT_ITER steps
+            if ((i == 1 && SHOULD_PRINT_DIAG(RTstepcount)) || (i > 1 && SHOULD_PRINT_DIAG(total_step_count))) {
+                double bb_flux = SIGMA * pow(Tint, 4.0);
+                printf("Diagnostic from the climate.c file:\n");
                 printf("RT CONVERGENCE DIAGNOSTIC - Step %d:\n", RTstepcount);
-                printf("  Rfluxmax = %.4e W/m² (target: < %.2e)\n", Rfluxmax, Tol_RC);
-                printf("  dRfluxmax = %.4e (target: < %.2e)\n", dRfluxmax, Tol_RC_gradient);
-                printf("  radiationO = %.4e (target: < %.2e)\n", radiationO, Tol_RC/2.);
+                printf("  Rfluxmax = %.4e W/m² (target: < %.2e or < %.2e (Tol_RC_R * bb_flux))\n", Rfluxmax, Tol_RC, Tol_RC_R * bb_flux);
+                printf("  dRfluxmax = %.4e (target: < %.2e (Tol_RC_gradient))\n", dRfluxmax, Tol_RC_gradient);
+                printf("  radiationO = %.4e (target: < %.2e or < %.2e (Tol_RC_R * bb_flux))\n", radiationO, Tol_RC, Tol_RC_R * bb_flux);
                 printf("  Converged: flux=%s, gradient=%s, net_flux=%s, OVERALL=%s\n", 
                        status.flux_converged ? "YES" : "NO", 
                        status.gradient_converged ? "YES" : "NO",
@@ -368,8 +375,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 break;
             }
 
-            // Print-out new TP profile every pevery steps
-            if (pcount == pevery)
+            // Print-out new TP profile every step for jacobian solver, otherwise every pevery steps
+            if ((TIME_STEPPING == 0) || (pcount == pevery))
             {
                 /* Print-out new TP profile*/
                 //ms23: also print diagnostics
@@ -408,11 +415,12 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 
         // If RT didn't converge, print diagnostic
         if (!status.overall_converged) {
+            double bb_flux = SIGMA * pow(Tint, 4.0);
             printf("\n=== RADIATIVE TRANSFER DID NOT CONVERGE ===\n");
             printf("RT stopped after %d steps (limit) in RC iteration %d\n", RTstepcount, i);
-            printf("Final Rfluxmax = %.3e W/m² (target: < %.2e)\n", Rfluxmax, Tol_RC);
+            printf("Final Rfluxmax = %.3e W/m² (target: < %.2e or < %.2e)\n", Rfluxmax, Tol_RC, Tol_RC_R * bb_flux);
             printf("Final dRfluxmax = %.3e W/m² (target: < %.2e)\n", dRfluxmax, Tol_RC_gradient);
-            printf("Final radiationO = %.3e W/m² (target: < %.2e)\n", radiationO, Tol_RC/2.);
+            printf("Final radiationO = %.3e W/m² (target: < %.2e or < %.2e)\n", radiationO, Tol_RC, Tol_RC_R * bb_flux);
             printf("Proceeding to convective adjustment...\n\n");
         }
 
@@ -563,12 +571,14 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         } // END of convective adjustment iteration
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         
-        // APPLY RAINOUT BASED ON EVENT MODE (This is using Grahams alpha method, alhpa = 1 == keep all condensates)
+        // APPLY RAINOUT BASED ON EVENT MODE
+        // NOT TESTED!!!!
+        // Not sure if this is necessary anymore, but can be modiified to have some kind of realistic removal of material
         int apply_rainout = 0;  // Flag to determine if rainout should be applied
         
         if (RAINOUT_MODE == 0) {
-            // Continuous mode: rainout every iteration (original behavior)
-            apply_rainout = 1;
+            // no rainout
+            apply_rainout = 0;
         } else if (RAINOUT_MODE == 1) {
             // Single event mode: rainout only once at specified iteration
             apply_rainout = (i == RAINOUT_TRIGGER_ITERATION && rainout_events_completed == 0);
@@ -580,40 +590,21 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         
         if (apply_rainout) {
             rainout_events_completed++;
-            // printf("\n");
-            // printf("*********************************************************\n");
-            // printf("*** CONVECTIVE STEP %d: CLOUD FORMATION EVENT %d ***\n", total_step_count, rainout_events_completed);
-            // printf("*********************************************************\n");
-            // printf("Climate iteration %d, Convective step %d: Applying realistic cloud physics\n", i, total_step_count);
-            // printf("Cloud physics triggered (mode = %d, event %d)\n", RAINOUT_MODE, rainout_events_completed);
-            // printf("\n");
 
-            // for (j=1; j<=zbin; j++) {
-            //     double layer_mass_loss = 1.0;  // Track mass loss for this layer
-            //     ms_rainout(j, &layer_mass_loss); // Apply rainout physics
-                
-            //     // Store mass loss for pressure adjustment
-            //     cumulative_mass_loss[j] *= layer_mass_loss;
-            // }        
-            // SKIP GRAHAM ALPHA: Go directly from equilibrium to realistic sedimentation
-            // Graham+2021 has already set equilibrium cloud amounts in ms_adiabat()
-            // Now we apply realistic microphysics without ad hoc removal
-            
-            // CLOUD PHYSICS NOW INTEGRATED INTO REGULAR CONVECTION LOOP
-            // The following code is commented out because cloud physics is now applied 
-            // continuously in the convection loop rather than only during special events
-            /*
-            printf("=== CALCULATING ENHANCED CLOUD PHYSICS ===\n");
+            printf("\n");
+            printf("*********************************************************\n");
+            printf("*** CONVECTIVE STEP %d: Rainout EVENT %d ***\n", total_step_count, rainout_events_completed);
+            printf("*********************************************************\n");
+            printf("\n");
+
             for (j=1; j<=zbin; j++) {
-                apply_enhanced_cloud_physics(j, GA); // Calculate particle properties on full equilibrium amounts
-            }
-            printf("=== ENHANCED CLOUD PHYSICS COMPLETE ===\n");
-            
-            printf("=== APPLYING ACKERMAN & MARLEY (2001) CLOUD REDISTRIBUTION ===\n");
-            apply_equilibrium_cloud_distribution(GA);
-            printf("=== ACKERMAN & MARLEY (2001) REDISTRIBUTION COMPLETE ===\n");
-            */
-            
+                double layer_mass_loss = 1.0;  // Track mass loss for this layer
+                ms_rainout(j, &layer_mass_loss); // Apply rainout physics
+                
+                // Store mass loss for pressure adjustment
+                cumulative_mass_loss[j] *= layer_mass_loss;
+            }        
+
         } else {
             if (RAINOUT_MODE > 0) {
                 printf("RC iteration %d: No rainout (events completed: %d/%d)\n", 
@@ -621,8 +612,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             }
         }
 
-
-
+        //--------------------------------------------------------
+        // Some code I was trying to use to do pressure adjustment for realistic rainout approach
+        // Not used now, but possibly something similar can be implemented in the future
+        //--------------------------------------------------------
         // /* PRESSURE ADJUSTMENT for realistic rainout approach */
         // if (PRESSURE_CONSERVATION == 1) {
         //     // Calculate total mass loss across all layers during this convective step
@@ -671,10 +664,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         //                P[0], 100.0*(P[0]/P_original[0] - 1.0));
         //     }
         // }        
-        /* NO PRESSURE ADJUSTMENT NEEDED for realistic sedimentation approach */
-        // Realistic sedimentation conserves mass by redistributing material between layers
-        // Only material falling out of the bottom layer (surface) leaves the atmosphere
-        // This should be a small effect compared to Graham's alpha removal approach
+        //--------------------------------------------------------
+        //--------------------------------------------------------
         
         /* hydrostatic equilibrium */
         printf("=== Computing hydrostatic equilibrium ===\n");
@@ -722,7 +713,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
         printf("=====================================\n\n");
 
-        if (pcount == PRINT_ITER)
+        if ((TIME_STEPPING == 0) || (pcount == PRINT_ITER))
         {
         //ms23: print convection diagnostics
             FILE *frc,*fcon;
@@ -791,10 +782,6 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     }// END main iterative Rad-Conv loop:
 //*************************************************************
 
-
-
-
-    
     /* Print-out new TP profile */
     //ms23: also diagnostic files
     FILE *fp,*frt,*frc,*fcon;

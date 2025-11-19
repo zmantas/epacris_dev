@@ -20,10 +20,6 @@ double COHeat(double T);
 double H2OHeat(double T);
 double H2SHeat(double T);
 
-// Note: Global variables for dynamic condensibles management are defined in the main file
-// NCONDENSIBLES and CONDENSIBLES[] are declared in global_temp.h
-// ALPHA_RAINOUT is a single constant value defined in AlphaAb.h
-
 //=========================================================
 //=== Function identifiers ================================
 
@@ -53,6 +49,7 @@ double get_original_xtotal(int layer, int species_index); // Get original abunda
 void init_original_xtotal_tracking(); // Initialize original abundance tracking
 
 //=== Helper function identifiers =========================
+const char* get_species_name(int species_id); // Get species name from ID
 double ms_psat_h2o(double temp); //calc saturation pressure of water
 double ms_psat_nh3(double temp); //calc saturation pressure
 double ms_psat_co(double temp); //calculate saturation pressure of carbon monoxide
@@ -612,9 +609,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
 //*********************************************************
 void ms_rainout(int lay, double* mass_loss_ratio)
 {
-    // Apply rainout physics once per RC iteration
-    // This function handles the Graham+2021 rainout approach with proper mass conservation
-    
+
     int i, j;
     
     // Get cloud and vapor amounts for condensible species
@@ -650,7 +645,7 @@ void ms_rainout(int lay, double* mass_loss_ratio)
         
     // STEP 2: Update non-condensible species based on conservation approach
     if (PRESSURE_CONSERVATION == 1) {
-        // REALISTIC APPROACH (Closed System):
+        // REALISTIC APPROACH Pressure adjusts:
         // Non-condensibles maintain absolute abundance, mole fractions increase naturally
         // No scaling needed - they're already physically correct
         // Atmospheric mass loss will be tracked for pressure adjustment
@@ -675,7 +670,7 @@ void ms_rainout(int lay, double* mass_loss_ratio)
             printf("  Original mass estimate: %.6e, New mass: %.6e\n", original_total_mass, new_total_mass);
         }
     } else {
-        // OPEN SYSTEM APPROACH: Maintain Graham+2021 constraint x_d + x_v + x_c = 1.0
+        // Maintain Graham+2021 constraint x_d + x_v + x_c = 1.0
         // Layer-specific scaling: only species with clouds in THIS layer are exempt
         // All other species (including condensibles without clouds here) get scaled
         
@@ -788,7 +783,7 @@ void ms_rainout(int lay, double* mass_loss_ratio)
     // This function only handles Graham's basic alpha rainout
     // Enhanced cloud physics and sedimentation are handled in separate functions
     
-}// END: void ms_rainout()
+}// END: void ms_rainout(int lay, double* mass_loss_ratio)
 
 //=========================================================
 //=== Enhanced Cloud Physics Function ====================
@@ -1182,249 +1177,6 @@ void cloud_redistribution_none(double gravity, double P[]) {
 
     printf("Particle properties computed - no material redistribution performed\n");
 }
-
-
-// DISCARDED CLOUD REDISTRIBUTIONFUNCTION!! DISCARDED FUNCTION !!
-// CORRECT ACKERMAN & MARLEY (2001) IMPLEMENTATION
-// Applies retention factors to Graham's equilibrium amounts
-// Uses real particle sizes from particlesizef_local for sedimentation physics
-// void apply_equilibrium_cloud_distribution(double gravity)
-// {
-//     // CORRECT APPROACH: Apply retention factors to Graham's equilibrium amounts
-//     // Don't redistribute - just apply sedimentation physics to what thermodynamics says should condense
-    
-//     printf("=== APPLYING SEDIMENTATION TO GRAHAM'S EQUILIBRIUM AMOUNTS ===\n");
-//     printf("LAYER NUMBERING: Layer 0 = Surface (high P), Layer %d = Top (low P)\n", zbin);
-    
-//     // Calculate total cloud amounts before sedimentation for diagnostics
-//     double total_cloud_before = 0.0;
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-//             total_cloud_before += clouds[layer][species_id];
-//         }
-//     }
-    
-//     // Store fallen material for each species
-//     double fallen_material[zbin+1][NCONDENSIBLES];
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             fallen_material[layer][i] = 0.0;
-//         }
-//     }
-    
-//     // Apply sedimentation layer by layer (TOP TO BOTTOM)
-//     // In EPACRIS: layer zbin = top, layer 0 = surface
-//     // Material falls from high layer numbers to low layer numbers
-//     for (int layer = zbin; layer >= 1; layer--) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-            
-//             // Get Graham's equilibrium amount (what thermodynamics says should condense)
-//             double graham_condensate = clouds[layer][species_id];
-            
-//             if (graham_condensate < 1.0e-20) continue;
-            
-//             // Get retention factor from enhanced cloud physics
-//             double retention = 1.0; // Default: keep everything
-//             if (i < MAX_CONDENSIBLES) {
-//                 retention = cloud_retention[layer][i];
-//             } else {
-//                 // Fallback: use ALPHA_RAINOUT if enhanced physics didn't run
-//                 retention = ALPHA_RAINOUT;
-//             }
-            
-//             // Apply physical bounds to retention
-//             if (retention < 0.001) retention = 0.001; // Minimum 0.1% retention
-//             if (retention > 0.95) retention = 0.95;   // Maximum 95% retention
-            
-//             // Calculate retained vs. falling material
-//             double retained = graham_condensate * retention;
-//             double falling = graham_condensate * (1.0 - retention);
-            
-//             // Update this layer (retained amount only)
-//             clouds[layer][species_id] = retained;
-            
-//             // CORRECTED: Add falling material to layer below (lower layer number)
-//             // Material falls from layer N to layer N-1 (toward surface)
-//             if (layer > 1) {
-//                 fallen_material[layer-1][i] += falling;
-//             }
-            
-//             // Debug output for key layer and species
-//             if (layer == 60 && species_id == 7 && graham_condensate > 1.0e-15) {
-//                 printf("Layer %d, Species %d: Graham=%.2e, retention=%.3f, retained=%.2e, falling=%.2e\n",
-//                        layer, species_id, graham_condensate, retention, retained, falling);
-//                 printf("  Using particle size: %.1f μm, fall velocity: %.2f m/s\n",
-//                        (i < MAX_CONDENSIBLES) ? particle_radius_um[layer][i] : 0.0,
-//                        (i < MAX_CONDENSIBLES) ? fall_velocity_ms[layer][i] : 0.0);
-//                 printf("  Material falls from layer %d to layer %d (toward surface)\n", layer, layer-1);
-//             }
-            
-//             // DEBUG: Check for very low retention (potential issue)
-//             if (retention < 0.1 && graham_condensate > 1.0e-15) {
-//                 printf("WARNING: Very low retention %.3f in layer %d, species %d\n", retention, layer, species_id);
-//             }
-//         }
-//     }
-    
-//     // Add fallen material to receiving layers
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-            
-//             if (fallen_material[layer][i] > 0.0) {
-//                 clouds[layer][species_id] += fallen_material[layer][i];
-                
-//                 // Debug significant additions
-//                 // if (layer >= 55 && layer <= 65 && species_id == 7 && fallen_material[layer][i] > 1.0e-15) {
-//                 //     printf("Layer %d receives fallen material: %.2e\n", layer, fallen_material[layer][i]);
-//                 // }
-//             }
-//         }
-//     }
-    
-//     // Calculate total cloud amounts after sedimentation for diagnostics
-//     double total_cloud_after = 0.0;
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-//             total_cloud_after += clouds[layer][species_id];
-//         }
-//     }
-    
-//     // printf("Total cloud mass: before=%.3e, after=%.3e, conservation ratio=%.6f\n", 
-//     //        total_cloud_before, total_cloud_after, total_cloud_after/total_cloud_before);
-    
-//     // // DEBUG: Show cloud profile for H2O (species 7) around key layers
-//     // printf("CLOUD PROFILE DEBUG (H2O around layers 55-65):\n");
-//     // for (int layer = 65; layer >= 55; layer--) {
-//     //     double h2o_vmr = clouds[layer][7] / MM[layer];
-//     //     printf("  Layer %d: H2O VMR = %.2e\n", layer, h2o_vmr);
-//     // }
-    
-//     printf("=== SEDIMENTATION COMPLETE ===\n");
-// }
-
-// DISCARDED CLOUD REDISTRIBUTIONFUNCTION!! DISCARDED FUNCTION !!
-// // BACKUP FUNCTION FOR EQUILIBRIUM CLOUD DISTRIBUTION where clouds fall out
-// void apply_equilibrium_cloud_distribution_backup(double gravity)
-// {
-//     // CORRECT APPROACH: Apply retention factors to Graham's equilibrium amounts
-//     // Don't redistribute - just apply sedimentation physics to what thermodynamics says should condense
-    
-//     printf("=== APPLYING SEDIMENTATION TO GRAHAM'S EQUILIBRIUM AMOUNTS ===\n");
-//     printf("LAYER NUMBERING: Layer 0 = Surface (high P), Layer %d = Top (low P)\n", zbin);
-    
-//     // Calculate total cloud amounts before sedimentation for diagnostics
-//     double total_cloud_before = 0.0;
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-//             total_cloud_before += clouds[layer][species_id];
-//         }
-//     }
-    
-//     // Store fallen material for each species
-//     double fallen_material[zbin+1][NCONDENSIBLES];
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             fallen_material[layer][i] = 0.0;
-//         }
-//     }
-    
-//     // Apply sedimentation layer by layer (TOP TO BOTTOM)
-//     // In EPACRIS: layer zbin = top, layer 0 = surface
-//     // Material falls from high layer numbers to low layer numbers
-//     for (int layer = zbin; layer >= 1; layer--) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-            
-//             // Get Graham's equilibrium amount (what thermodynamics says should condense)
-//             double graham_condensate = clouds[layer][species_id];
-            
-//             if (graham_condensate < 1.0e-20) continue;
-            
-//             // Get retention factor from enhanced cloud physics
-//             double retention = 1.0; // Default: keep everything
-//             if (i < MAX_CONDENSIBLES) {
-//                 retention = cloud_retention[layer][i];
-//             } else {
-//                 // Fallback: use ALPHA_RAINOUT if enhanced physics didn't run
-//                 retention = ALPHA_RAINOUT;
-//             }
-            
-//             // Apply physical bounds to retention
-//             if (retention < 0.001) retention = 0.001; // Minimum 0.1% retention
-//             if (retention > 0.95) retention = 0.95;   // Maximum 95% retention
-            
-//             // Calculate retained vs. falling material
-//             double retained = graham_condensate * retention;
-//             double falling = graham_condensate * (1.0 - retention);
-            
-//             // Update this layer (retained amount only)
-//             clouds[layer][species_id] = retained;
-            
-//             // CORRECTED: Add falling material to layer below (lower layer number)
-//             // Material falls from layer N to layer N-1 (toward surface)
-//             if (layer > 1) {
-//                 fallen_material[layer-1][i] += falling;
-//             }
-            
-//             // Debug output for key layer and species
-//             if (layer == 60 && species_id == 7 && graham_condensate > 1.0e-15) {
-//                 printf("Layer %d, Species %d: Graham=%.2e, retention=%.3f, retained=%.2e, falling=%.2e\n",
-//                        layer, species_id, graham_condensate, retention, retained, falling);
-//                 printf("  Using particle size: %.1f μm, fall velocity: %.2f m/s\n",
-//                        (i < MAX_CONDENSIBLES) ? particle_radius_um[layer][i] : 0.0,
-//                        (i < MAX_CONDENSIBLES) ? fall_velocity_ms[layer][i] : 0.0);
-//                 printf("  Material falls from layer %d to layer %d (toward surface)\n", layer, layer-1);
-//             }
-            
-//             // DEBUG: Check for very low retention (potential issue)
-//             if (retention < 0.1 && graham_condensate > 1.0e-15) {
-//                 printf("WARNING: Very low retention %.3f in layer %d, species %d\n", retention, layer, species_id);
-//             }
-//         }
-//     }
-    
-//     // Add fallen material to receiving layers
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-            
-//             if (fallen_material[layer][i] > 0.0) {
-//                 clouds[layer][species_id] += fallen_material[layer][i];
-                
-//                 // Debug significant additions
-//                 // if (layer >= 55 && layer <= 65 && species_id == 7 && fallen_material[layer][i] > 1.0e-15) {
-//                 //     printf("Layer %d receives fallen material: %.2e\n", layer, fallen_material[layer][i]);
-//                 // }
-//             }
-//         }
-//     }
-    
-//     // Calculate total cloud amounts after sedimentation for diagnostics
-//     double total_cloud_after = 0.0;
-//     for (int layer = 1; layer <= zbin; layer++) {
-//         for (int i = 0; i < NCONDENSIBLES; i++) {
-//             int species_id = CONDENSIBLES[i];
-//             total_cloud_after += clouds[layer][species_id];
-//         }
-//     }
-    
-//     // printf("Total cloud mass: before=%.3e, after=%.3e, conservation ratio=%.6f\n", 
-//     //        total_cloud_before, total_cloud_after, total_cloud_after/total_cloud_before);
-    
-//     // // DEBUG: Show cloud profile for H2O (species 7) around key layers
-//     // printf("CLOUD PROFILE DEBUG (H2O around layers 55-65):\n");
-//     // for (int layer = 65; layer >= 55; layer--) {
-//     //     double h2o_vmr = clouds[layer][7] / MM[layer];
-//     //     printf("  Layer %d: H2O VMR = %.2e\n", layer, h2o_vmr);
-//     // }
-    
-//     printf("=== SEDIMENTATION COMPLETE ===\n");
-// }
 
 
 void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl)
@@ -1863,19 +1615,16 @@ void initialize_condensibles_mode() {
         for (int i = 0; i < NCONDENSIBLES; i++) {
             CONDENSIBLES[i] = CONDENSIBLES_MANUAL[i];
         }
-        
         printf("CONDENSATION MODE: Manual - Using predefined %d condensible species\n", NCONDENSIBLES);
         printf("Manual condensibles: ");
         for (int i = 0; i < NCONDENSIBLES; i++) {
             printf("%d ", CONDENSIBLES[i]);
         }
         printf("\n");
-        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
-        
+
     } else if (CONDENSATION_MODE == 1) {
         // Automatic mode: detect condensibles dynamically
         printf("CONDENSATION MODE: Automatic - Will detect condensibles dynamically\n");
-        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
         NCONDENSIBLES = 0; // Will be set by detect_condensibles_atmosphere()
         
     } else if (CONDENSATION_MODE == 2) {
@@ -1887,9 +1636,7 @@ void initialize_condensibles_mode() {
         for (int i = 0; i < NCONDENSIBLES; i++) {
             CONDENSIBLES[i] = CONDENSIBLES_MANUAL[i];
         }
-        
         printf("CONDENSATION MODE: Hybrid - Starting with manual list, will validate and expand\n");
-        printf("Alpha rainout value: %.3f (%.1f%% retention)\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
     }
 }
 
@@ -2006,6 +1753,22 @@ void update_condensibles_list(int layer) {
     // For now, we'll use the global detection approach
 }
 
+// Helper function to get species name from ID
+const char* get_species_name(int species_id) {
+    switch(species_id) {
+        case 7:  return "H2O";
+        case 9:  return "NH3";
+        case 20: return "CO";
+        case 21: return "CH4";
+        case 45: return "H2S";
+        case 52: return "CO2";
+        case 53: return "H2";
+        case 54: return "O2";
+        case 55: return "N2";
+        default: return "Unknown";
+    }
+}
+
 void detect_condensibles_atmosphere() {
     // Detect condensibles across the entire atmosphere
     
@@ -2039,7 +1802,9 @@ void detect_condensibles_atmosphere() {
         if (is_condensible_anywhere && detected_count < MAX_CONDENSIBLES) {
             detected_condensibles[detected_count] = species_id;
             detected_count++;
-            printf("  Species %d detected as condensible\n", species_id);
+            printf("=======================================================\n");
+            printf("Species %d (%s) detected as condensible\n", species_id, get_species_name(species_id));
+            printf("=======================================================\n");
         }
     }
     
@@ -2073,14 +1838,7 @@ void detect_condensibles_atmosphere() {
             }
         }
     }
-    
-    printf("FINAL CONDENSIBLES LIST: %d species\n", NCONDENSIBLES);
-    printf("Species IDs: ");
-    for (int i = 0; i < NCONDENSIBLES; i++) {
-        printf("%d ", CONDENSIBLES[i]);
-    }
-    printf("\n");
-    //printf("Using single alpha value: %.3f (%.1f%% retention) for all species\n", ALPHA_RAINOUT, ALPHA_RAINOUT * 100.0);
+
 }
 
 void report_condensibles_changes(int iteration) {

@@ -7,6 +7,7 @@ Last modified: July 20, 2011
 
 #ifndef __GLOBAL_H__
 #define __GLOBAL_H__
+#include "config.h"
 
 /*---- External Variables ------------------------------------------- */
 
@@ -73,8 +74,6 @@ void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* nc
 void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]);
 
 // Cloud physics functions
-void apply_enhanced_cloud_physics(int layer, double gravity);
-void apply_equilibrium_cloud_distribution(double gravity);
 void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass);
 void calculate_cloud_properties(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height, double *mass_per_particle, double *n_density);
 
