@@ -1,4 +1,6 @@
+// Import header files
 #include "config.h" // Config file needs to be included so IDE's can understand variables
+
 // All other header files
 #include <stdio.h>
 #include <math.h>
@@ -10,7 +12,7 @@
 #include "global_temp.h"
 #include "nrutil.h"
 
-
+// ** Declear global variables that are needed for other c files **
 // --- Atmospheric structure arrays ---
 double TAUdoub[2*zbin+1], Tdoub[2*zbin+1], Pdoub[2*zbin+1], MMdoub[2*zbin+1], zdoub[2*zbin+1]; // Double grid for non-isothermal layers: all bottom-up!!
 double meanmolecular[zbin+1]; // Mean molecular mass
@@ -94,8 +96,9 @@ double cloud_retention[zbin+1][MAX_CONDENSIBLES]; // Cloud retention factor
 
 // --- Radiative transfer control variables ---
 double new_ttop; // New top temperature
-double rt_drfluxmax_init; // Initial radiative flux maximum
+
 int RTstepcount; // Radiative transfer step counter
+double rt_drfluxmax_init; // Initial radiative flux maximum (for scaling convergence checks)
 double THETAREF; // Slant path angle [radians] (converted from THETAANGLE in degrees)
 
 // --- Dynamic condensibles management ---
@@ -103,6 +106,7 @@ int NCONDENSIBLES = 0; // Number of condensible species
 int CONDENSIBLES[MAX_CONDENSIBLES]; // Array of condensible species IDs
 // Note: ALPHA_RAINOUT is now a single constant defined in AlphaAb.h
 
+// Import C files
 #include "GetData.c"
 #include "chemequil.c"
 #include "Interpolation.c"
@@ -855,7 +859,7 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
         }
         /* count for Helium */
 
-        // ##### WHY is helium added here? It also recalculated in ms_Climate_test_v1.c #####
+        // Compute mean molecular mass
         heliumnumber = fmax(MM[j] - totalnumber,0.0);
         totalnumber += heliumnumber;
         totalmass += heliumnumber*4.0;
@@ -924,7 +928,11 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     read_cloud_optical_tables_mie();
     printf("Finished reading Mie tables (LX-Mie format)\n");   
 
-    
+
+    // Initialize layer-dependent alpha values as in Graham+2021
+    init_alpha_values();
+
+
     // Save chem equilibrium output and prepare other output files
     strcpy(outstdt,dirroute);
     strcat(outstdt,"/ConcentrationSTD_T.dat");
@@ -975,16 +983,16 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     // Start timing for radiative solver
     if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET); 
     
-    // !!! CALLING THE MAIN CLIMATE SOLVER !!!
+    // !!! CALLING THE INITIAL CLIMATE SOLVER !!!
     if(RadConv_Solver == 1) {
         ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,0);
         for (j=0; j<=zbin; j++) Tnew[j]=tempeq[j];
     }
 
-//**************************************************************
-    /* Iteraing further with NMAX iters full Climate-Chemistry solver
-    Only necessary if large chemistry changes are expected, 1 iteration is normally sufficient */
-//**************************************************************
+//===================================================================
+// Iteraing further with NMAX iters full Climate-Chemistry solver
+// Only necessary if large chemistry changes are expected, 1 iteration is normally sufficient
+//===================================================================
     for (i=0; i<NMAX; i++) { //Climate-Chemistry solver iteration
         
         printf("%s\n",fillmi); 
@@ -1015,7 +1023,17 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
                 clouds[j][ii] = 0.0;
             }
         }
-        printf("%s\n", "Cloud array reset for new iteration");
+        
+        // Reset cloud opacity arrays to prevent using stale values from previous iteration
+        // Use 'ii' instead of 'i' to avoid overwriting the NMAX loop variable
+        for (j=1; j<=zbin; j++) {
+            for (ii=0; ii<NLAMBDA; ii++) {
+                cH2O[j][ii] = 0.0;
+                aH2O[j][ii] = 1.0;
+                gH2O[j][ii] = 0.0;
+            }
+        }
+        printf("%s\n", "Cloud and cloud opacity arrays reset for new iteration");
         
 
         // T grids recalculated
@@ -1102,7 +1120,9 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
         if(RadConv_Solver == 0) GreyTemp(P,outnewtemp,TINTSET);
         
         if(RadConv_Solver == 1) {
-            ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,i+1); // NMAX iteration i+1 (starts from 1)
+            int nmax_iter_val = i+1;  // Store in local variable to prevent modification
+            printf("DEBUG: Before ms_Climate call: i=%d, i+1=%d, nmax_iter_val=%d\n", i, i+1, nmax_iter_val);
+            ms_Climate(tempeq,P,T,TINTSET,outnewtemp,outrtdiag,outrcdiag,outcondiag,nmax_iter_val); // NMAX iteration i+1 (starts from 1)
             for (j=0; j<=zbin; j++) Tnew[j]=tempeq[j];
         }
         

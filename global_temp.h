@@ -42,6 +42,11 @@ extern double xx[zbin+1][NSP+1];
 extern double mkv[], Tnew[], Pnew[];
 extern double clouds[zbin+1][NSP+1]; // Cloud abundances for condensible species (number density) molecules cm^-3
 
+// Photochemistry arrays (PhotoCross)
+extern double **cross, **crosst;  // PhotoCross cross sections
+extern int *stdcross;             // PhotoCross species indices
+extern double *qysum;              // PhotoCross quantum yields
+
 // Cloud optical property arrays for radiative transfer [layer][wavelength]
 extern double **cH2O, **aH2O, **gH2O;  // H2O cloud: cross-section (cm^-1), albedo, asymmetry g
 extern double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
@@ -55,6 +60,12 @@ extern int CONDENSIBLES[];
 
 // Additional global variables
 extern double Tdoub[];
+extern double TAUdoub[];  // Double grid optical depth
+extern double Pdoub[];    // Double grid pressure
+extern double MMdoub[];   // Double grid number density
+extern double zdoub[];    // Double grid altitude
+extern double rt_drfluxmax_init; // Initial radiative flux maximum
+
 extern int RTstepcount;
 extern double GA; // Gravitational acceleration
 
@@ -67,39 +78,11 @@ extern double particle_number_density[zbin+1][MAX_CONDENSIBLES]; // Particle num
 extern double fall_velocity_ms[zbin+1][MAX_CONDENSIBLES];
 extern double cloud_retention[zbin+1][MAX_CONDENSIBLES];
 
-// Convection function declarations
-void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]);
-void ms_rainout(int lay, double* mass_loss_ratio);
-void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);
-void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]);
-
-// Cloud physics functions
-void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass);
-void calculate_cloud_properties(double g, double T, double P, double mean_molecular_mass, int condensible_species_id, double Kzz, int layer, double *r0, double *r1, double *r2, double *VP, double *effective_settling_velocity, double *scale_height, double *mass_per_particle, double *n_density);
-
-// Global alpha storage functions
-void init_alpha_values();
-void update_alpha_from_cold_trapping(int layer, int species_index, double alpha_reduction);
-double get_global_alpha_value(int layer, int species_index);
-
-// Dynamic condensation detection functions
-void initialize_condensibles_mode();
-int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure);
-void update_condensibles_list(int layer);
-void detect_condensibles_atmosphere();
-void report_condensibles_changes(int iteration);
-
-// Opacity reinterpolation functions
-extern void reinterpolate_all_cia_opacities();
-extern void reinterpolate_all_opacities();
-
-// Cleanup functions
-extern void cleanup_opacity_cache(void);
-extern void cleanup_cia_cache();
-
-// Cloud optical property functions (from cloud_opticsH.c - LX-Mie format)
-extern void read_cloud_optical_tables_mie(void);
-extern void cleanup_cloud_optical_tables_mie(void);
+// NOTE: Function declarations have been moved to module-specific headers:
+// - Convection/condensation/cloud physics: conv_cond_funcs.h
+// - Opacity reading/reinterpolation: readcross.h
+// - CIA opacity: readcia.h
+// - Cloud optical properties: cloud_optics.h
 
 #endif /* !__GLOBAL_H__ */
 

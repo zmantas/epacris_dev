@@ -5,7 +5,7 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
                          double *tempb, double *P, char *diagnostic_header,
                          double Tint, double tol_rc, double tol_rc_r,
                          double *cp_array, double *lapse_array, int *isconv_array, double **saturation_ratio_array,
-                         double *pot_temp_array, int nmax_iteration, double **particle_sizes) {
+                         double *pot_temp_array, int nmax_iteration, double (*particle_number_density)[MAX_CONDENSIBLES]) {
     
     FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
     
@@ -30,9 +30,9 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
     for (int i=0; i<NCONDENSIBLES; i++) {
         fprintf(temp_data, " sat_ratio_%d", CONDENSIBLES[i]);
     }
-    // Add particle size headers for each condensible species
+    // Add particle number density headers for each condensible species
     for (int i=0; i<NCONDENSIBLES; i++) {
-        fprintf(temp_data, " particle_size_%d", CONDENSIBLES[i]);
+        fprintf(temp_data, " particle_number_density_%d", CONDENSIBLES[i]);
     }
     fprintf(temp_data, "\n");
     
@@ -81,9 +81,9 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
             fprintf(temp_data, " %e", saturation_ratio_array[j][i]);
         }
         
-        // Add particle size data for each condensible species (in micrometers)
+        // Add particle number density data for each condensible species (particles/m³)
         for (int i=0; i<NCONDENSIBLES; i++) {
-            fprintf(temp_data, " %e", particle_sizes[j][i]);
+            fprintf(temp_data, " %e", particle_number_density[j][i]);
         }
         
         fprintf(temp_data, "\n");

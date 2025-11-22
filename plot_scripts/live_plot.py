@@ -108,10 +108,10 @@ for i, col_name in enumerate(header[2:], 2):  # Skip Temperature and Pressure
         saturation_ratio_indices.append(i)
         species_num = int(col_name.split('_')[2])  # Extract species number from sat_ratio_X
         saturation_ratio_species.append(species_num)
-    elif col_name.startswith('particle_size_'):
-        # This is a particle size column (e.g., particle_size_7, particle_size_9)
+    elif col_name.startswith('particle_number_density_'):
+        # This is a particle number density column (e.g., particle_number_density_7, particle_number_density_9)
         particle_size_indices.append(i)
-        species_num = int(col_name.split('_')[2])  # Extract species number from particle_size_X
+        species_num = int(col_name.split('_')[3])  # Extract species number from particle_number_density_X
         particle_size_species.append(species_num)
     elif col_name.startswith('c'):
         # This is a cloud species (with 'c' prefix)
@@ -234,40 +234,6 @@ if h2o_vmr_data is not None:
         ax1.plot(condensation_temps, valid_pressures, 'cyan', linewidth=3, linestyle='-', 
                  label=f'H₂O Condensation', alpha=0.9,zorder=100)
     
-# else:
-#     # Fallback: if H2O data not found, use generic curves
-#     print("Warning: H2O data (species 7) not found in gas data. Using generic condensation curves.")
-    
-#     # Use the same pressure range as the atmospheric profile
-#     pressure_range = np.logspace(np.log10(min(pressure)), np.log10(max(pressure)), 100)
-    
-#     # Plot generic curves for typical VMR values
-#     for vmr, style, alpha_val in [(0.01, '--', 0.5), (0.1, ':', 0.8), (0.5, '-.', 0.5)]:
-#         condensation_temps_generic = []
-#         for p_bar in pressure_range:
-#             p_total = p_bar * 1e5  # Convert bar to Pa
-#             p_partial = vmr * p_total
-#             temp_guess = 200.0
-#             for iteration in range(50):
-#                 p_sat = h2o_saturation_pressure(temp_guess)
-#                 error = p_partial - p_sat
-#                 if abs(error) < 1e-6:
-#                     break
-#                 if temp_guess > 273.16:
-#                     a = 1 - 373.15/temp_guess
-#                     dp_dt = p_sat * (13.3185 * 373.15/temp_guess**2 - 2*1.97*a*373.15/temp_guess**2 
-#                                    - 3*0.6445*a*a*373.15/temp_guess**2 - 4*0.1229*a*a*a*373.15/temp_guess**2)
-#                 else:
-#                     dp_dt = p_sat * (5723.265/temp_guess**2 + 3.53068/temp_guess - 0.00728332)
-#                 if abs(dp_dt) > 1e-10:
-#                     temp_guess = temp_guess - error / dp_dt
-#                 else:
-#                     temp_guess = temp_guess + 1.0
-#                 temp_guess = max(50.0, min(2000.0, temp_guess))
-#             condensation_temps_generic.append(temp_guess)
-        
-#         ax1.plot(condensation_temps_generic, pressure_range, 'cyan', linewidth=2, linestyle=style, 
-#                  alpha=alpha_val, label=f'H₂O Condensation (VMR={vmr:.2f})')
 
 # Mark convective layers if data is available
 if isconv_data is not None:
@@ -278,17 +244,17 @@ if isconv_data is not None:
     if np.any(convective_mask):
         # Plot red circles on convective layers
         ax1.scatter(t_new[convective_mask], pressure[convective_mask], 
-                   c='red', s=40, alpha=0.8, zorder=5, marker='o',
+                   c='red', s=40, alpha=0.4, zorder=1, marker='o',
                    label=f'Convective layers ({num_convective_layers})')
         
         # Optionally add a thicker red line segment over convective parts
         # This creates a visual emphasis without breaking continuity
-        for i in range(len(t_new)):
-            if convective_mask[i]:
-                # Draw short red line segments for convective layers
-                if i > 0:
-                    ax1.plot([t_new[i-1], t_new[i]], [pressure[i-1], pressure[i]], 
-                            'r-', linewidth=6, alpha=0.6, zorder=3)
+        # for i in range(len(t_new)):
+        #     if convective_mask[i]:
+        #         # Draw short red line segments for convective layers
+        #         if i > 0:
+        #             ax1.plot([t_new[i-1], t_new[i]], [pressure[i-1], pressure[i]], 
+        #                     'r-', linewidth=6, alpha=0.6, zorder=3)
 
 # Add text showing number of convective layers
 # ax1.text(0.02, 0.98, f'Convective layers: {num_convective_layers}', 
@@ -528,44 +494,44 @@ ax2.set_ylim(max(pressure), min(pressure))
 ax2.set_xlim(1e-14, 1)
 ax2.set_xlabel('Volume Mixing Ratio', fontsize=12)
 ax2.set_ylabel('Pressure (Bar)', fontsize=12)
-ax2.set_title('Gas & Cloud Abundances + Particle Sizes', fontsize=14)
+ax2.set_title('Gas & Cloud Abundances + Cloud Number Density', fontsize=14)
 ax2.tick_params(axis='both', which='major', labelsize=10)
 ax2.grid(True, alpha=0.3)
 
-# Create twin axis for particle sizes
+# Create twin axis for particle number density
 if particle_size_data is not None:
     ax2_twin = ax2.twiny()
     
-    # Plot particle sizes for condensible species
+    # Plot particle number density for condensible species
     for i, species_num in enumerate(particle_size_species):
-        particle_sizes = particle_size_data[:, i]
+        particle_number_density = particle_size_data[:, i]
         
-        # Only plot if there are significant particle sizes
-        if np.any(particle_sizes > 1e-3):  # Threshold: 1e-3 micrometers
+        # Only plot if there are significant number densities
+        if np.any(particle_number_density > 1e0):  # Threshold: 1 particle/m³
             # Use same color as corresponding species if available
             color = species_colors.get(species_num, COLORS[i % len(COLORS)])
             name = species_names.get(species_num, f"Species {species_num}")
             
             # Get non-zero values for proper averaging
-            significant_sizes = particle_sizes[particle_sizes > 1e-3]
-            avg_size = np.mean(significant_sizes) if len(significant_sizes) > 0 else 0
+            significant_density = particle_number_density[particle_number_density > 1e0]
+            avg_density = np.mean(significant_density) if len(significant_density) > 0 else 0
             
-            # Plot particle sizes with dotted lines and triangle markers
+            # Plot particle number density with dotted lines and triangle markers
             ax2_twin.plot(
-                particle_sizes, 
+                particle_number_density, 
                 pressure, 
                 color='red', 
                 linestyle='-',
                 linewidth=2,
                 alpha=1,
-                label=f"{name} (r={avg_size:.1f}μm)"
+                label=f"{name} (n={avg_density:.1e} m⁻³)"
             )
     
-    #ax2_twin.set_xscale('log')
+    ax2_twin.set_xscale('log')
     ax2_twin.set_yscale('log')
     ax2_twin.set_ylim(max(pressure), min(pressure))
-    ax2_twin.set_xlim(5., 40)  # Particle size range: 0.01 to 1000 micrometers
-    ax2_twin.set_xlabel('Particle Size (μm)', fontsize=12, color='darkred')
+    ax2_twin.set_xlim(1e0, 1e15)  # Particle number density range: 1 to 1e15 particles/m³
+    ax2_twin.set_xlabel('Particle Number Density (m⁻³)', fontsize=12, color='darkred')
     ax2_twin.tick_params(axis='x', colors='darkred')
     
     # Combined legend for both axes
@@ -596,7 +562,7 @@ if lapse_index is not None:
     ax3_twin.set_yscale('log')
     ax3_twin.set_ylim(max(pressure), min(pressure))
     # Set reasonable x-limits for lapse rate (typical values 0.1 to 1.0)
-    ax3_twin.set_xlim(0.0, 0.4)
+    ax3_twin.set_xlim(0.1, 0.4)
     ax3_twin.set_xlabel('Lapse Rate (d ln T / d ln P)', fontsize=12, color='blue')
     ax3_twin.tick_params(axis='x', colors='blue')
     
@@ -629,10 +595,10 @@ if saturation_ratio_data is not None and len(saturation_ratio_indices) > 0:
     ax4.axvspan(1.0, 10, alpha=0.1, color='red', label='Supersaturated (S>1)')
     ax4.axvspan(0.01, 1.0, alpha=0.1, color='blue', label='Subsaturated (S<1)')
     
-    ax4.set_xscale('log')
+    #ax4.set_xscale('log')
     ax4.set_yscale('log')
     ax4.set_ylim(max(pressure), min(pressure))
-    ax4.set_xlim(0.01, 10)  # Reasonable range for saturation ratios
+    ax4.set_xlim(0.6, 1.4)  # Reasonable range for saturation ratios
     ax4.set_xlabel('Saturation Ratio (P/Psat)', fontsize=12)
     ax4.set_ylabel('Pressure (Bar)', fontsize=12)
     ax4.set_title('Saturation Ratios', fontsize=14)
@@ -648,5 +614,5 @@ else:
     ax4.set_xlabel('Saturation Ratio (P/Psat)', fontsize=12)
     ax4.set_ylabel('Pressure (Bar)', fontsize=12)
 
-plt.savefig(f'{live_plot_dir}TP_profile_step_{nmax_iteration}_{total_step_count}.png', dpi=100)
+plt.savefig(f'{live_plot_dir}TP_profile_{nmax_iteration}_step_{total_step_count}.png', dpi=100)
 plt.close()

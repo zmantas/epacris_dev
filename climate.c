@@ -1,51 +1,40 @@
-
-#include "config.h" // Config file needs to be included so IDE's can understand variables
+// Standard library headers
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+
+// Project headers
+#include "config.h"
 #include "constant.h"
 #include "global_temp.h"  // Include global variable declarations
 #include "cloud_optics.h"  // Cloud optical property functions
 #include "ms_functions.h"  // Contains filleq, fillmi, etc.
+#include "climate.h"  // This file's header (contains RTConvergenceStatus, SHOULD_PRINT_DIAG, function declarations)
+#include "conv_cond_funcs.h"
+#include "readcross.h"
+#include "readcia.h"
+
+// Import C files
 #include "ludcmp.c"
 #include "lubksb.c"
 #include "BTridiagonal.c"
 #include "ms_radtrans_test.c"
-#include "conv_cond_funcs.c"  // Implementation
+#include "conv_cond_funcs.c"
 #include "plot_utils.c"
 
-// Add these declarations after your #include statements
-// but before your ms_Climate function
-extern void reinterpolate_all_cia_opacities();
-extern void reinterpolate_all_opacities();
-
-
-// Helper macro: Print diagnostics every step for jacobian solver (TIME_STEPPING==0), 
-// otherwise every PRINT_ITER steps
-#define SHOULD_PRINT_DIAG(step_count) \
-    ((TIME_STEPPING == 0) ? 1 : ((step_count) % PRINT_ITER == 0))
-
-// Function to check radiative transfer convergence
-typedef struct {
-    bool flux_converged;
-    bool gradient_converged; 
-    bool overall_converged;
-    bool net_flux_converged;
-} RTConvergenceStatus;
-
-RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax, 
-                    double Tint, double tol_rc, double tol_rc_r, double radiationO);
-
-
+// ============================================================================
+// Function Implementations
+// ============================================================================
 
 RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax, 
                                        double Tint, double tol_rc, double tol_rc_r, double radiationO) {
     RTConvergenceStatus status = {0};
     
     // Calculate reference values
+    // Internal flux check makes little sense, but keeping it
     double bb_flux = SIGMA * pow(Tint, 4.0);
     
     // Check individual criteria
@@ -58,8 +47,6 @@ RTConvergenceStatus check_rt_convergence(double Rfluxmax, double dRfluxmax,
     return status;
 }
 
-void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outnewtemp[],char outrtdiag[],char outrcdiag[],char outcondiag[], int nmax_iteration);
-
 void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outnewtemp[],char outrtdiag[],char outrcdiag[],char outcondiag[], int nmax_iteration)
 {
     // Initialize variables
@@ -68,7 +55,6 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     double znew[zbin+1]; // For printing altitude to files
     double lapse[zbin+1], cp[zbin+1];
     double scaleheight; // For calculating altitude
-    //GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET; DELETE?
 
     // Copy temperature to a new array
     for (j=0; j<=zbin; j++) {
@@ -76,10 +62,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 		//tempb[j] = Tdoub[2*j]; //bottom-up! // This line originalyl commented out
 	}
 
-   /* Helium calculation 
-   The left over mass in the atmosphere is assumed to be helium.
-   If the value is negative, it is set to zero.
-   Repetitive computation? or for iteration purposes?*/ 
+    /* Helium calculation 
+    The left over mass in the atmosphere is assumed to be helium.
+    If the value is negative, it is set to zero.*/ 
     double heliumnumber[zbin+1];
     for (j=1; j<=zbin; j++) {
         heliumnumber[j] = MM[j];
@@ -91,17 +76,15 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
     }
     
-    // Initialize layer-dependent alpha values +++++++++++++++++++++++
-    // Must be called before any ms_adiabat calls to set up layer-specific retention
-    init_alpha_values();
 
-    // Condensible detection ++++++++++++++++++++++++++++++++++++++
+
+    // Condensible detection 
     // Initialize condensibles mode based on CONDENSATION_MODE setting
     initialize_condensibles_mode();
     
     // If using automatic or hybrid mode, detect condensibles across atmosphere
     if (CONDENSATION_MODE == 1 || CONDENSATION_MODE == 2) {
-        // Only detect once before loop if TIMING = 0
+        // Following is run once to detect before loop if TIMING = 0
         detect_condensibles_atmosphere();
     }
     // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -121,17 +104,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
     }
     
-    // Allocate 2D array for particle sizes [layer][condensible_species]
-    // Used for plotting particle size profiles alongside cloud abundances
-    double **particle_sizes;
-    particle_sizes = (double **)malloc((zbin+1) * sizeof(double *));
-    for (int j=0; j<=zbin; j++) {
-        particle_sizes[j] = (double *)malloc(MAX_CONDENSIBLES * sizeof(double));
-        // Initialize all to zero (including unused slots)
-        for (int i=0; i<MAX_CONDENSIBLES; i++) {
-            particle_sizes[j][i] = 0.0;
-        }
-    }
+    // Use global particle_number_density array for plotting (already populated by cloud_redistribution_none)
+    // No need to allocate - use global array directly
     double Rfluxmax,dRfluxmax;
     int isconv[zbin+1], ncl=0, nrl=zbin; //convective layers setup
     int isconv_old[zbin+1], prevconv[zbin+1];
@@ -185,8 +159,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 //#########################################################
 // For live plotting debugging
 //#########################################################
-    int total_step_count = 0; //for live plot, to keep persistence
-
+    int total_step_count = 0; // For live plot, to keep persistence
+#if LIVE_PLOTTING
     // Create live_plot directory path
     char live_plot_dir[1024];
     sprintf(live_plot_dir, "%slive_plot/", OUT_DIR);
@@ -199,6 +173,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         sprintf(mkdir_cmd, "mkdir -p \"%s\" 2>/dev/null", live_plot_dir);
     #endif
     system(mkdir_cmd);
+#else
+    // Dummy variable to avoid compilation errors when LIVE_PLOTTING is disabled
+    char live_plot_dir[1] = {0};
+#endif
 
 //*************************************************************
 // main iterative Rad-Conv loop:
@@ -252,7 +230,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 saturation_ratios[j][k] = 0.0;
             }
         }
-        write_live_plot_data(total_step_count, live_plot_dir, tempb, P, initial_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
+
+#if LIVE_PLOTTING
+        write_live_plot_data(total_step_count, live_plot_dir, tempb, P, initial_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_number_density);
+#endif
 
         // Main radiative transfer loop using clean convergence checking
         RTConvergenceStatus status = {0};  // Initialize status
@@ -286,14 +267,16 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             total_step_count++; //for live plot, keeps persistence
             
             
-                    // Live plotting during radiative transfer
+        // Live plotting during radiative transfer
+#if LIVE_PLOTTING
         if ((i == 1 && SHOULD_PRINT_DIAG(RTstepcount)) || (i > 1 && SHOULD_PRINT_DIAG(total_step_count))) {
             char rt_diag[512];
             sprintf(rt_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e", 
                     RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO);
             // Saturation ratios will be updated during next convective adjustment
-            write_live_plot_data(total_step_count, live_plot_dir, tempbnew, P, rt_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
+            write_live_plot_data(total_step_count, live_plot_dir, tempbnew, P, rt_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_number_density);
         }
+#endif
             
             // Print status
             //printf("%s %d\n", "Radiative loop RTstepCount = ", RTstepcount);
@@ -367,11 +350,13 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // Exit if converged or step limit reached
             if ( status.overall_converged || RTstepcount >= RTsteplimit ) {
                 /* Generate final plot */
+#if LIVE_PLOTTING
                 char final_rt_diag[512];
                 sprintf(final_rt_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e", 
                         RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO);
                 // Saturation ratios will be updated during next convective adjustment
-                write_live_plot_data(total_step_count, live_plot_dir, tempbnew, P, final_rt_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
+                write_live_plot_data(total_step_count, live_plot_dir, tempbnew, P, final_rt_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_number_density);
+#endif
                 break;
             }
 
@@ -394,9 +379,12 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 //pcount = 0; nneded for convection later
             }
         }
-        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+        //============================================================
         //ms22: END of radiative transfer iteration
-        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //============================================================
 
         // This is if you dont want to do convective adjustment
         if(access(RTstopfile, F_OK )==0) printf("\n\n%s\n\n","===== RTstopfile found. RT loop aborted! =====");
@@ -404,12 +392,13 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         // DIAGNOSTIC: Check if radiative transfer converged
         // Note: We still need to check convection even if RT converged
         if (status.overall_converged) {
+            double bb_flux = SIGMA * pow(Tint, 4.0);
             printf("\n=== RADIATIVE TRANSFER CONVERGED ===\n");
             printf("RT achieved convergence after %d steps in RC iteration %d\n", RTstepcount, i);
-            printf("Final Rfluxmax = %.3e W/m²\n", Rfluxmax);
-            printf("Final dRfluxmax = %.3e W/m²\n", dRfluxmax);
-            printf("Final radiationO = %.3e W/m²\n", radiationO);
-            printf("=== PROCEEDING TO CONVECTIVE ADJUSTMENT ===\n\n");
+            printf("Final Rfluxmax = %.3e W/m² (target: < %.2e or < %.2e (Tol_RC_R * bb_flux))\n", Rfluxmax, Tol_RC, Tol_RC_R * bb_flux);
+            printf("Final dRfluxmax = %.3e W/m² (target: < %.2e (Tol_RC_gradient))\n", dRfluxmax, Tol_RC_gradient);
+            printf("Final radiationO = %.3e W/m² (target: < %.2e or < %.2e (Tol_RC_R * bb_flux))\n\n", radiationO, Tol_RC, Tol_RC_R * bb_flux);
+            printf("=== PROCEEDING TO CONVECTIVE ADJUSTMENT ===\n");
             // Do NOT break here - we need to check convection and clouds
         }
 
@@ -421,34 +410,50 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             printf("Final Rfluxmax = %.3e W/m² (target: < %.2e or < %.2e)\n", Rfluxmax, Tol_RC, Tol_RC_R * bb_flux);
             printf("Final dRfluxmax = %.3e W/m² (target: < %.2e)\n", dRfluxmax, Tol_RC_gradient);
             printf("Final radiationO = %.3e W/m² (target: < %.2e or < %.2e)\n", radiationO, Tol_RC, Tol_RC_R * bb_flux);
-            printf("Proceeding to convective adjustment...\n\n");
+            printf("Proceeding to convective adjustment...\n");
         }
 
 
 
 
-        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        // CONVECTION!!!!!!!!!!
-        //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        //============================================================
+        // CONVECTION and CONDENSATION BEGINS HERE
+        //============================================================
 
-        deltaconv = zbin; //start with all layers convective
-        while (deltaconv > 0) // continue until no convective layers are found
+        deltaconv = zbin; // Start with all layers convective
+        while (deltaconv > 0) // Continue until no convective layers are found
         {
+            // Reset potential temperature and convective region for each layer
             for (j=1; j<=zbin; j++) {
-                pot_temp[j] = 0.0; //reset potential temperature
-                ncreg[j] = 0; //reset convective region
+                pot_temp[j] = 0.0; // Reset potential temperature
+                ncreg[j] = 0; // Reset convective region
             } 
 
+            // Calculate condensation equilibrium, cold traps, lapse rate
+            // heat capacity lapse rate and heat capacity for each layer
             for (j=1; j<=zbin; j++) 
             {
-                // 1. Calculate condensation equilibrium, lapse rate and heat capacity  
-                ms_adiabat(j,lapse,heliumnumber[j],&cp[j],saturation_ratios[j]); //calculate condensation equilibrium, lapse rate and heat capacity
+                // 1. Calculate condensation equilibrium and lapse rate
+                condensation_and_lapse_rate(j,lapse,heliumnumber[j],&cp[j],saturation_ratios[j]); //calculate condensation equilibrium, lapse rate and heat capacity
                 
                 //check for clouds
                 nclouds[j] = 0;
                 for (k=1;k<=NSP;k++)
                 {
                     if(clouds[j][k] > 0.0) nclouds[j] += 1;
+                }
+            }
+            
+            // Recalculate heliumnumber after condensation (xx changes when gas condenses)
+            // This ensures heliumnumber accounts for material moved from gas (xx) to clouds
+            // Use 'k' instead of 'i' to avoid overwriting the RC loop variable
+            for (j=1; j<=zbin; j++) {
+                heliumnumber[j] = MM[j];
+                for (k=1; k<=NSP; k++) {
+                    heliumnumber[j] -= xx[j][k];
+                }
+                if (heliumnumber[j]<0.0) {
+                    heliumnumber[j] = 0.0;
                 }
             }
 
@@ -469,8 +474,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 // No cloud physics calculation
             } else if (INCLUDE_CLOUD_PHYSICS == 1) {
                 cloud_redistribution_none(GA, P); // Calculate physics without redistribution
+                // particle_number_density is populated globally, no copy needed
             } else if (INCLUDE_CLOUD_PHYSICS == 2) {
-                exponential_cloud(GA, P, particle_sizes);
+                // exponential_cloud populates global particle_number_density array
+                exponential_cloud(GA, P, NULL); // Parameter unused, uses global array
             }
             
             // Calculate cloud optical properties from particle sizes and densities
@@ -548,12 +555,17 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // // prev_total_gas = curr_total_gas;
 
             // Add live plotting during convection - plot at every step since there are few convective steps
+#if LIVE_PLOTTING
             total_step_count++;
             char conv_diag[512];
             sprintf(conv_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e", 
                     RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO);
+           
             // Saturation ratios are updated by ms_adiabat calls above
-            write_live_plot_data(total_step_count, live_plot_dir, tempb, P, conv_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
+            write_live_plot_data(total_step_count, live_plot_dir, tempb, P, conv_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_number_density);
+#else
+            total_step_count++; // Still increment for consistency
+#endif
             //printf("%s %d\n", "Convection step count = ", total_step_count);
 
             //ms22: check if convective regions were fully addressed:
@@ -564,7 +576,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 prevconv[j] = isconv[j];
             }
             for (j=1; j<=zbin; j++) tl[j] = 0.5* (tempb[j]+tempb[j-1]);
-            printf("%s %d\n","deltaconv=",deltaconv);
+            //printf("%s %d\n","deltaconv=",deltaconv);
 
             
     //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -592,14 +604,14 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             rainout_events_completed++;
 
             printf("\n");
-            printf("*********************************************************\n");
+            printf("---------------------------------------------------------\n");
             printf("*** CONVECTIVE STEP %d: Rainout EVENT %d ***\n", total_step_count, rainout_events_completed);
-            printf("*********************************************************\n");
+            printf("---------------------------------------------------------\n");
             printf("\n");
 
             for (j=1; j<=zbin; j++) {
                 double layer_mass_loss = 1.0;  // Track mass loss for this layer
-                ms_rainout(j, &layer_mass_loss); // Apply rainout physics
+                simulate_rainout(j, &layer_mass_loss); // Apply rainout physics
                 
                 // Store mass loss for pressure adjustment
                 cumulative_mass_loss[j] *= layer_mass_loss;
@@ -668,7 +680,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         //--------------------------------------------------------
         
         /* hydrostatic equilibrium */
-        printf("=== Computing hydrostatic equilibrium ===\n");
+        //printf("=== Computing hydrostatic equilibrium ===\n");
         znew[0]=0.0;
         for (j=1; j<=zbin; j++) {
             tempc[j] = (tempb[j]+tempb[j-1])/2.0;
@@ -699,8 +711,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         if (CONDENSATION_MODE == 1 || CONDENSATION_MODE == 2) {
             printf("Current condensibles count: %d species [", NCONDENSIBLES);
             for (int k=0; k<NCONDENSIBLES; k++) {
-                printf("%d", CONDENSIBLES[k]);
-                if (k < NCONDENSIBLES-1) printf(",");
+                printf("%d (%s)", CONDENSIBLES[k], get_species_name(CONDENSIBLES[k]));
+                if (k < NCONDENSIBLES-1) printf(", ");
             }
             printf("]\n");
         }
@@ -754,11 +766,12 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         for (j=1; j<=zbin; j++) tl[j] = 0.5* (tempb[j]+tempb[j-1]);
 
         // LIVE PLOT AFTER TEMPERATURE SMOOTHING (END OF RC ITERATION)
+#if LIVE_PLOTTING
         char final_rc_diag[512];
         sprintf(final_rc_diag, "RADIATIVE_DIAGNOSTICS: RTstep=%d Rfluxmax=%.3e dRfluxmax=%.3e equilib_layers=%d ncl=%d nrl=%d radiationI0=%.3e radiationI1=%.3e radiationO=%.3e RC_ITERATION_END: RC=%d isconv_sum=%d", 
                 RTstepcount, Rfluxmax, dRfluxmax, sumisequil, ncl, nrl, radiationI0, radiationI1, radiationO, i, isconv_sum);
-        // Saturation ratios were updated during convective adjustment
-        write_live_plot_data(total_step_count, live_plot_dir, tempeq, P, final_rc_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_sizes);
+        write_live_plot_data(total_step_count, live_plot_dir, tempeq, P, final_rc_diag, Tint, Tol_RC, Tol_RC_R, cp, lapse, isconv, saturation_ratios, pot_temp, nmax_iteration, particle_number_density);
+#endif
 
         // DETERMINE IF CONVERGED
         if (isconv_sum == 0 && i!=1 && sumisequil>=zbin) {
@@ -821,10 +834,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
     // Free allocated memory
     for (int j=0; j<=zbin; j++) {
         free(saturation_ratios[j]);
-        free(particle_sizes[j]);
     }
     free(saturation_ratios);
-    free(particle_sizes);
+    // particle_number_density is a global array, no need to free
     
     free_dvector(Rflux,0,nrl);
 }

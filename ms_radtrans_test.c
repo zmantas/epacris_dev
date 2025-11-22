@@ -10,14 +10,19 @@
     * 'OJO' ... warnings to be addressed before public release
 */
 
-
+// Include header files
 #include <math.h>
 #include "constant.h"
-//#include "ms_2stream.c" //ms: solving for radiative fluxes using Heng+2018
-#include "ms_2stream_test.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
-#include "toon_2stream.c" //ms: solving for radiative fluxes using Toon+89
-#include "mm_2stream.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
+#include <stdio.h>
 #include "config.h"
+#include "global_temp.h"
+#include "nrutil.h"
+#include "lu_decomp.h"  // LU decomposition functions (ludcmp, lubksb)
+
+// Include C files
+#include "ms_2stream_test.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
+#include "toon_2stream.c"    //ms: solving for radiative fluxes using Toon+89
+#include "mm_2stream.c" //ms: solving for radiative fluxes using Heng+2018; Deitrick+2021
 
 void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isconv[], double lapse[], double T[], double Tint, double cp[], double dt[], int isequil[], double *radiationI0_out, double *radiationI1_out, double *radiationO_out);
 

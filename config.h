@@ -10,7 +10,7 @@
 
 
 //--------------------------------------------------------------------- 
-//****************New config paramaters from MZ*****************
+// *** New config paramaters from MZ ***
 //--------------------------------------------------------------------- 
 // Opacity species list - used to read opacity files
 #define OPACITY_SPECIES_LIST \
@@ -19,12 +19,17 @@
      "HNO3", "N2O", "SO2", "NO2", "NO", \
      "O2", "O3", "OCS", "HCN", "HO2", \
      "C2H2", "C2H4", "H2CO", "H2O2"
-#define CROSSHEADING		"../Opacity/MayTest/" // Opacity file directory
+     
+// Opacity file directory
+#define CROSSHEADING		"../Opacity/MayTest/"
 
-#define INCLUDE_CLOUD_PHYSICS 0// 0 = no cloud physics
+// Cloud physics mode
+#define INCLUDE_CLOUD_PHYSICS 1 // 0 = no cloud physics
                                 // 1 = cloud physics; no redistribution
-                                // 2 = forced cloud redistribution; exponential
-#define DELTA_P 1.0e-12 // Supersaturation parameter for particle sizing
+                                //  2 = forced cloud redistribution; exponential
+
+// Supersaturation parameter for particle sizing
+#define DELTA_P 1.0e-12 // Needs separate mode where it is determined automatically
 
 // Cold trap, limits the abundance above condensation region
 #define ENABLE_COLD_TRAP  1  // 0 = disabled, 1 = enabled (affects only condensibles)
@@ -32,6 +37,11 @@
 // Print cloud debugging output in terminal
 #define CLOUD_DEBUG 0  // 0 = disable cloud optics debugging output
                        // 1 = enable detailed cloud optics interpolation debugging
+
+
+// Live plotting mode
+#define LIVE_PLOTTING 1  // 0 = disable live plotting,
+                         // 1 = enable live plotting
 
 // Temperature variation tolerance in K used for Climate-Chemistry iterations
 // Was hardcoded before, just added it here now if necessary for later
@@ -66,6 +76,7 @@
 // Set the Graham's alpha value. 1 = 100% of condensibles are retained, 0 = 0% of condensibles are retained
 #define ALPHA_RAINOUT 1.0        // Single alpha value for ALL condensible species (fraction retained after rainout)
 //--------------------------------------------------------------------- 
+// *** End of new params from MZ ***
 //--------------------------------------------------------------------- 
 
 
@@ -74,7 +85,7 @@
 //--------------------------------------------------------------------- 
 #define RadConv_Solver  1   // 0 = Guillot TP profile
                             // 1 = Radiative Convective Climate
-#define TIME_STEPPING   0   // 0 = matrix solver for RT fluxes
+#define TIME_STEPPING   1   // 0 = matrix solver for RT fluxes
                             // 1 = time stepping for RT fluxes
 #define TS_SCHEME       1   // 0 = testing
                             // 1 = HELIOS scheme (code but not publication)
@@ -118,14 +129,15 @@
 //--------------------------------------------------------------------- 
 /* Iteration Conditions */
 //--------------------------------------------------------------------- 
-#define NMAX        1       /* Maximum Climate - Chemistry Iterations */
-#define NMAX_RC     1       /* Maximum Radiative - Convective Iterations, minimum 1 */
-#define NMAX_RT     2000  /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      50  /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
+#define NMAX        1       /* Maximum Climate - Chemistry Iterations - Don't need more than 1 with opacity updating */
+#define NMAX_RC     10      /* Maximum Radiative - Convective Iterations, minimum 1 */
+#define NMAX_RT     500     /* Maximum Radiative Transfer Iterations */
+#define NRT_RC      50      /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
 /* Atmospheric Properties */
+//--------------------------------------------------------------------- 
 #define RefIdxType  6	/* Type of Refractive Index: 0=Air, 1=CO2, 2=He, 3=N2, 4=NH3, 5=CH4, 6=H2, 7=O2, 8=CO, 9=H2O */
 #define AIRM        2.3 /* Initial mean molecular mass of atmosphere, in atomic mass unit*/
 #define FADV	    0.25     /* Advection factor: 0.25=uniformly distributed, 0.6667=no Advection */
@@ -155,7 +167,7 @@
 #define PBOTTOM     200       /* Pressure at the bottom of atmosphere */
 
 //--------------------------------------------------------------------- 
-/* Solver tolerances and parameters */
+/* Solver tolerances and other parameters */
 //--------------------------------------------------------------------- 
 #define IFRC        1        /* do we update radiative-convective boundary in each radiative balance iteration? */
 #define Tol_RC_T    1.0e-0  /* convergence tolerance in temperature, in Kelvin */
@@ -168,7 +180,6 @@
 #define DT_MAX      1.0e-1     /* maximum dT change in implicit Euler stepping of radiative balance */
 #define RJACOB_TEMPVAR 1.0e+0  /* temperature variation in calculating the Jacobian */
 //--------------------------------------------------------------------- 
-
 
 //--------------------------------------------------------------------- 
 // Grid params for opacity etc
@@ -187,7 +198,7 @@
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
-// Other params I have no clue about
+// Other params that I have not touched
 //--------------------------------------------------------------------- 
 /* Parameters to be adapted in overal model upgrade */
 #define NSP         115                 /*Number of species in the standard list*/

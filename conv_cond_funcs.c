@@ -1,3 +1,4 @@
+// Import header files
 #include "config.h" // Config file needs to be included so IDE's can understand variables
 #include <math.h>
 #include <stdio.h>   // For printf function
@@ -5,63 +6,26 @@
 #include <stdbool.h>  // For bool type
 #include "constant.h"
 #include "global_temp.h"  // Include global variable declarations
-#include "condensed_heat.h"  // Include new condensed heat capacity functions
-
-// Heat capacity function declarations
-double AirHeat(double T);
-double CO2Heat(double T);
-double HeHeat(double T);
-double N2Heat(double T);
-double NH3Heat(double T);
-double CH4Heat(double T);
-double H2Heat(double T);
-double O2Heat(double T);
-double COHeat(double T);
-double H2OHeat(double T);
-double H2SHeat(double T);
+#include "condensed_heat.h"  // Include condensed heat capacity functions
+#include "ms_gasheat.h"  // Include gas-phase heat capacity functions
+#include "conv_cond_funcs.h"  // Include function declarations
 
 //=========================================================
-//=== Function identifiers ================================
-
-void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[]); // calculate lapse rate (NO rainout)
-void ms_rainout(int lay, double* mass_loss_ratio); // apply rainout physics
-void exponential_cloud(double gravity, double P[], double **particle_r2); // HELIOS-style exponential cloud distribution
-void cloud_redistribution_none(double gravity, double P[]); // Calculate cloud physics without redistribution
-void get_particle_properties(int species_id, double temperature, double *density, double *accommodation_coeff, double *molecular_mass); // get species-specific properties
-void ms_conv_check(double tempb[],double P[],double lapse[],int isconv[],int* ncl,int* nrl);   // Checks each pair of layers for convective stability
-void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double cp[], int ncreg[], double pot_temp[]); // Adjust temperatures due to convection
-
-// New functions for dynamic condensation detection
-void initialize_condensibles_mode(); // Initialize condensibles based on CONDENSATION_MODE
-int check_species_condensible(int species_id, double temp, double pressure, double partial_pressure); // Check if species should be condensible
-void update_condensibles_list(int layer); // Update condensibles list for a specific layer
-void detect_condensibles_atmosphere(); // Detect condensibles across entire atmosphere
-void report_condensibles_changes(int iteration); // Report changes in condensibles list
-
-// Global alpha storage functions for dynamic cloud-thermodynamics integration
-void init_alpha_values(); // Initialize physics-based alpha storage (actively used)
-void update_alpha_from_cold_trapping(int layer, int species_index, double alpha_reduction); // Update alpha from cold trap condensate removal
-double get_global_alpha_value(int layer, int species_index); // Get layer-specific alpha value (actively used by ms_adiabat)
-
-// Original abundance tracking functions
-void store_original_xtotal(int layer, int species_index, double xtotal_original); // Store original abundance
-double get_original_xtotal(int layer, int species_index); // Get original abundance
-void init_original_xtotal_tracking(); // Initialize original abundance tracking
-
-//=== Helper function identifiers =========================
-const char* get_species_name(int species_id); // Get species name from ID
+//=== Function Implementations ============================
+// Main function declarations are in conv_cond_funcs.h
+// Helper function forward declarations (needed because they're called before definition):
 double ms_psat_h2o(double temp); //calc saturation pressure of water
-double ms_psat_nh3(double temp); //calc saturation pressure
-double ms_psat_co(double temp); //calculate saturation pressure of carbon monoxide
-double ms_psat_ch4(double temp); //calculate saturation pressure of methane
-double ms_psat_co2(double temp); //calculate saturation pressure of carbon dioxide
-double ms_psat_h2(double temp); //calculate saturation pressure of hydrogen
-double ms_psat_o2(double temp); //calculate saturation pressure of oxygen
-double ms_psat_n2(double temp); //calculate saturation pressure of nitrogen
-double ms_psat_h2s(double temp); //calculate saturation pressure of hydrogen sulfide
-double ms_psat_feo2h2(double temp); //calculate saturation pressure of iron hydroxide
-double ms_psat_fes(double temp); //calculate saturation pressure of iron sulfide
-double ms_latent(int mol, double temp); //calc saturation pressure of water
+double ms_psat_nh3(double temp);
+double ms_psat_co(double temp);
+double ms_psat_ch4(double temp);
+double ms_psat_co2(double temp);
+double ms_psat_h2(double temp);
+double ms_psat_o2(double temp);
+double ms_psat_n2(double temp);
+double ms_psat_h2s(double temp);
+double ms_psat_feo2h2(double temp);
+double ms_psat_fes(double temp);
+double ms_latent(int mol, double temp);
 
 // GLOBAL ALPHA STORAGE FOR DYNAMIC CLOUD-THERMODYNAMICS INTEGRATION
 // This stores layer-specific alpha values (NOW ACTIVE - used for layer-dependent retention)
@@ -92,14 +56,12 @@ void init_alpha_values() {
 
 // Initialize original abundance tracking
 void init_original_xtotal_tracking() {
-    printf("DEBUG INIT: Initializing original Xtotal tracking\n");
     for (int layer = 1; layer <= zbin; layer++) {
         for (int i = 0; i < MAX_CONDENSIBLES; i++) {
             original_xtotal_values[layer][i] = -1.0; // -1 indicates uninitialized
         }
     }
     original_xtotal_initialized = 1;
-    printf("DEBUG INIT: Finished initializing original Xtotal tracking\n");
 }
 
 // Store original Xtotal value (only if not already stored)
@@ -144,12 +106,12 @@ void update_alpha_from_cold_trapping(int layer, int species_index, double alpha_
 }
 
 
-// Function to get layer-specific alpha value (actively used by ms_adiabat and ms_rainout)
+// Function to get layer-specific alpha value
 double get_global_alpha_value(int layer, int species_index) {
     // Initialize if not done yet (but only on first call)
     if (!global_alpha_initialized) {
         init_alpha_values();
-        printf("DEBUG: Auto-initialized alpha values in get_global_alpha_value\n");
+        //printf("DEBUG: Auto-initialized alpha values in get_global_alpha_value\n");
     }
     
     if (layer >= 1 && layer <= zbin && species_index >= 0 && species_index < MAX_CONDENSIBLES) {
@@ -161,13 +123,11 @@ double get_global_alpha_value(int layer, int species_index) {
     return ALPHA_RAINOUT; // Fallback to default (should not happen in normal operation)
 }
 
-//=========================================================
-//=== Functions ===========================================
-void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[])
+
+void condensation_and_lapse_rate(int lay, double lapse[], double xxHe, double* cp, double saturation_ratios[])
 {
-// Calculate adiabat acc. to Graham+2021 Eq.(1) 
+// Calculate adiabatic lapse rate according to Graham+2021 Eq.(1) 
 // The formulation below should be valid for dry, moist, and multi-species condensate conditions in dilute and non-dilute cases.
-//
 // Condensibles by species number from chemistry:
 // H2O : 7
 // NH3 : 9
@@ -179,7 +139,7 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
 // N2  : 55
 // Cp avail: Air(0.8 N2, 0.2 O2), CO2, He, N2, NH3, CH4, H2, O2, CO, H2O
 
-    //LOCAL parameters
+    // Local parameters
     int i,j;
 
     //variables for adiabatic calculation
@@ -566,19 +526,10 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
 
     lapse[lay] = lapse_num / lapse_denom;
 
-    *cp = cp_num / cp_denom; //return to climate module
+    *cp = cp_num / cp_denom; // Return heat capacity to climate module
 
-    //if(lay==1) printf("%s%e\n","lapse_num = ",lapse_num);
-    //if(lay==1) printf("%s%e\n","lapse_denom = ",lapse_denom);
-    //if(lay==1) printf("%s%e\n","sum_beta_xv = ",sum_beta_xv);
-    //if(lay==1) printf("%s%e\n","big_sum_denom_num = ",big_sum_denom_num);
-//    if(lay==1) printf("%s%e\n","lapse = ",lapse[lay]);
-
-    //propagate compositional changes back to main program 
-    // this is where the rainout needs to happen
     
-    // NO RAINOUT HERE - rainout is now handled separately in ms_rainout()
-    // Just set the gas and cloud phases based on current equilibrium
+    // Setthe gas and cloud abundances based on current equilibrium
     for (i=0; i<NCONDENSIBLES; i++) {
         xx[lay][CONDENSIBLES[i]] = Xv[i] * MM[lay];
         clouds[lay][CONDENSIBLES[i]] = Xc[i] * MM[lay];
@@ -604,10 +555,12 @@ void ms_adiabat(int lay, double lapse[], double xxHe, double* cp, double saturat
     //     printf("  Temperature = %.1f K, Pressure = %.3e Pa\n", tl[lay], pl[lay]);
     //     printf("\n");
     // }
+
+
 }// END: void ms_adiabat()
 //*********************************************************
 //*********************************************************
-void ms_rainout(int lay, double* mass_loss_ratio)
+void simulate_rainout(int lay, double* mass_loss_ratio)
 {
 
     int i, j;
@@ -783,7 +736,7 @@ void ms_rainout(int lay, double* mass_loss_ratio)
     // This function only handles Graham's basic alpha rainout
     // Enhanced cloud physics and sedimentation are handled in separate functions
     
-}// END: void ms_rainout(int lay, double* mass_loss_ratio)
+}
 
 //=========================================================
 //=== Enhanced Cloud Physics Function ====================
@@ -2249,7 +2202,7 @@ double ms_latent(int mol, double temp)
  * - Removed condensate is returned to vapor phase
  * - No material is lost from the system
  */
-void exponential_cloud(double gravity, double P[], double **particle_sizes) {
+void exponential_cloud(double gravity, double P[], double **particle_number_density_out) {
     
     // Use EPACRIS global arrays
     extern double zl[]; // Altitude at layer centers in km
@@ -2286,7 +2239,7 @@ void exponential_cloud(double gravity, double P[], double **particle_sizes) {
         if (cloud_bottom_layer == -1) {
             printf("Species %d: No cloud detected, skipping\n", species_id);
             for (int layer = 1; layer <= zbin; layer++) {
-                particle_sizes[layer][i] = 0.0;
+                particle_number_density[layer][i] = 0.0;
             }
             continue;
         }
@@ -2379,11 +2332,11 @@ void exponential_cloud(double gravity, double P[], double **particle_sizes) {
                                   species_id, Kzz_m2s, layer,
                                   &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height, &mass_per_particle, &n_density);
                 
-                // Store volume-weighted radius (r2) in micrometers for plotting
-                particle_sizes[layer][i] = r2;
+                // Store particle number density for plotting (particles/m³)
+                particle_number_density[layer][i] = n_density;
             } else {
-                // No condensate - zero particle size
-                particle_sizes[layer][i] = 0.0;
+                // No condensate - zero particle number density
+                particle_number_density[layer][i] = 0.0;
             }
         }
         
