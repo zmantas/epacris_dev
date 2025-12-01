@@ -41,7 +41,7 @@ static int original_xtotal_initialized = 0;
 
 // Function to calculate physics-based alpha values using cold trapping information
 void init_alpha_values() {
-    printf("DEBUG INIT: Initializing global alpha values to %.6e\n", ALPHA_RAINOUT);
+    //printf("DEBUG INIT: Initializing global alpha values to %.6e\n", ALPHA_RAINOUT);
     // This function should be called after condensation calculations to set alpha based on cold trapping
     // For now, initialize with default values - will be updated during runtime
     for (int layer = 1; layer <= zbin; layer++) {
@@ -51,7 +51,7 @@ void init_alpha_values() {
         }
     }
     global_alpha_initialized = 1; // Mark as initialized
-    printf("DEBUG INIT: Finished initializing global alpha values\n");
+    //printf("DEBUG INIT: Finished initializing global alpha values\n");
 }
 
 // Initialize original abundance tracking

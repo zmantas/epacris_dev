@@ -42,6 +42,7 @@ double **opacHBrO, **opacPH3, **opacCH3Cl, **opacCH3Br, **opacDMS, **opacCS2;
 
 // --- Cloud optical properties [layer][wavelength] ---
 double **cH2O, **aH2O, **gH2O;  // H2O cloud: extinction coefficient (cm^-1), albedo, asymmetry parameter
+double **cNH3, **aNH3, **gNH3;  // NH3 cloud: extinction coefficient (cm^-1), albedo, asymmetry parameter
 
 // --- Photochemistry arrays ---
 double **cross, **crosst; // PhotoCross in Clima
@@ -902,13 +903,22 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     cH2O = dmatrix(1,zbin,0,NLAMBDA-1);
     aH2O = dmatrix(1,zbin,0,NLAMBDA-1);
     gH2O = dmatrix(1,zbin,0,NLAMBDA-1);
+    cNH3 = dmatrix(1,zbin,0,NLAMBDA-1);
+    aNH3 = dmatrix(1,zbin,0,NLAMBDA-1);
+    gNH3 = dmatrix(1,zbin,0,NLAMBDA-1);
 
     // Initialize to zero (albedo = 1.0) (will be filled after cloud physics calculation)
+    // Initialize based on CLOUD_SPECIES - only initialize the active species arrays
     for (j=1; j<=zbin; j++) {
         for (i=0; i<NLAMBDA; i++) {
+            // Always initialize all arrays, but only the active one will be used
             cH2O[j][i] = 0.0;
             aH2O[j][i] = 1.0;
             gH2O[j][i] = 0.0;
+            
+            cNH3[j][i] = 0.0;
+            aNH3[j][i] = 1.0;
+            gNH3[j][i] = 0.0;
         }
     }
 
@@ -922,7 +932,6 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     // Read in all gas opacities
     read_all_opacities();
     printf("Finished reading all opacity files\n");   
-    // Read cloud optical property lookup tables (LX-Mie format)
 
     // Read in all cloud optical property lookup tables (LX-Mie format)
     read_cloud_optical_tables_mie();
@@ -949,7 +958,7 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     // Copy config file to output directory
     char config_outfile[1024];
     strcpy(config_outfile, dirroute);
-    strcat(config_outfile, "/config");
+    strcat(config_outfile, "config");
     strcat(config_outfile, "_");
     strcat(config_outfile, IN_FILE_NAME);
     strcat(config_outfile, ".txt");
@@ -1026,11 +1035,15 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
         
         // Reset cloud opacity arrays to prevent using stale values from previous iteration
         // Use 'ii' instead of 'i' to avoid overwriting the NMAX loop variable
+        // Always reset all cloud arrays - they will be filled by cloud physics if enabled
         for (j=1; j<=zbin; j++) {
             for (ii=0; ii<NLAMBDA; ii++) {
                 cH2O[j][ii] = 0.0;
                 aH2O[j][ii] = 1.0;
                 gH2O[j][ii] = 0.0;
+                cNH3[j][ii] = 0.0;
+                aNH3[j][ii] = 1.0;
+                gNH3[j][ii] = 0.0;
             }
         }
         printf("%s\n", "Cloud and cloud opacity arrays reset for new iteration");

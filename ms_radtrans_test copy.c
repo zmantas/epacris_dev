@@ -33,8 +33,9 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
     static int iter = 0;
 
 
-    // GA is global (declared in global_temp.h, defined in epacris_main.c)
-    // No local declaration needed - use the global GA directly
+    double GA;
+    // Calculate gravity
+    GA=GRAVITY*MASS_PLANET/RADIUS_PLANET/RADIUS_PLANET;
 	double mole2dust, planck, xlll;
     // Calculate mole2dust???? what is this? particle size and density defined in config file
 	mole2dust = PI*pow(AERSIZE,3)*AERDEN/6.0/AMU*2.0558;
@@ -263,8 +264,8 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 
             wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i]); //portion is reflected with albedo
             ws[j] += cH2O[j1][i]*aH2O[j1][i];
-            wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i]); //portion is reflected with albedo
-            ws[j] += cNH3[j1][i]*aNH3[j1][i];
+            // wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i]); //portion is reflected with albedo
+            // ws[j] += cNH3[j1][i]*aNH3[j1][i];
 
             
 
@@ -311,7 +312,7 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
             // cH2O*aH2O is scattering opacity (cm^-1), gH2O is asymmetry (dimensionless)
 
             g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i];
-            g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i];
+            //g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i];
 
 
 			if (ws[j] > 0.0) {

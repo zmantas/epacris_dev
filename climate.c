@@ -76,8 +76,6 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
         }
     }
     
-
-
     // Condensible detection 
     // Initialize condensibles mode based on CONDENSATION_MODE setting
     initialize_condensibles_mode();
@@ -190,13 +188,24 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             //tl_old[j] = tl[j]; //ms23: seems weird to overwrite here
             isconv_old[j] = isconv[j];
             prevconv[j] = isconv[j]; //for convective adjustment iteration
-            isconv[j] = 0; //Allways run RT on full grid
+            isconv[j] = 0; //Reset to all radiative for RT (RT expects this)
+            // Not resetting isconv to 0 causes the code to crash
         }
 
         // Resets number of convective layers
         ncl=0;
         // Resets the number of radiative layers (all assumed radiative)
         nrl=zbin;
+
+        // Print total radiative and convective and isconv[j] layers
+        // printf("Total radiative layers: %d\n", nrl);
+        // printf("Total convective layers: %d\n", ncl);
+        // printf("isconv[j] layers: ");
+        // for (j=1; j<=zbin; j++) {
+        //     printf("%d ", isconv[j]);
+        // }
+        // printf("\n");
+
 
 
 
@@ -436,7 +445,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
                 // 1. Calculate condensation equilibrium and lapse rate
                 condensation_and_lapse_rate(j,lapse,heliumnumber[j],&cp[j],saturation_ratios[j]); //calculate condensation equilibrium, lapse rate and heat capacity
                 
-                //check for clouds
+                // Record number of cloud layers
                 nclouds[j] = 0;
                 for (k=1;k<=NSP;k++)
                 {
@@ -483,8 +492,9 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // Calculate cloud optical properties from particle sizes and densities
             // This interpolates Mie scattering data to RT wavelength grid
             // Uses global arrays: clouds, particle_r2, particle_r0, particle_VP, particle_mass, wavelength
-            // Writes to global arrays: cH2O, aH2O, gH2O
-            if (cH2O != NULL && aH2O != NULL && gH2O != NULL) {
+            // Writes to global arrays: cH2O, aH2O, gH2O, cNH3, aNH3, gNH3
+            // Only calculate if cloud physics is enabled (clouds array will be populated)
+            if (INCLUDE_CLOUD_PHYSICS > 0 && cH2O != NULL && aH2O != NULL && gH2O != NULL) {
                 calculate_cloud_opacity_arrays();
             }
 
@@ -494,30 +504,33 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             /* determine convection, and record convective layers */
             ms_conv_check(tempb, P, lapse, isconv, &ncl, &nrl); //ms22: check convective layers
 
-//          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
-        // remove single radiative layer between convective layers
-/*          for (j=2; j<zbin; j++) { //rh->ms 2021
-                if (isconv[j]==0 && (isconv[j+1]==1 && isconv[j-1]==1)) {
-                    isconv[j]=1;
-                    ncl = ncl+1;
-                    nrl = nrl-1;
+            // Check if single layers are causing issues with spiking
+            //          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
+             // remove single radiative layer between convective layers
+            for (j=2; j<zbin; j++) { //rh->ms 2021
+                    if (isconv[j]==0 && (isconv[j+1]==1 && isconv[j-1]==1)) {
+                        isconv[j]=1;
+                        ncl = ncl+1;
+                        nrl = nrl-1;
+                    }
                 }
-            }
-*/
+
         
-        // remove single convective layer between radiative layers
-/*          for (j=2; j<zbin; j++) { //rh->ms 2021
-                if (isconv[j]==1 && (isconv[j+1]==0 && isconv[j-1]==0)) {
-                    isconv[j]=0;
-                    ncl = ncl-1;
-                    nrl = nrl+1;
+            // remove single convective layer between radiative layers
+    /*          for (j=2; j<zbin; j++) { //rh->ms 2021
+                    if (isconv[j]==1 && (isconv[j+1]==0 && isconv[j-1]==0)) {
+                        isconv[j]=0;
+                        ncl = ncl-1;
+                        nrl = nrl+1;
+                    }
                 }
-            }
-*/        
-   
+    */        
+    
 
             if(ncl>=0) ms_temp_adj(tempb, P, lapse, isconv, cp, ncreg, pot_temp); //ms22: assign convective regimes, adjust temperatures
 
+            
+            // UNUSED CODE START
             // // Track cloud mass changes for diagnostic purposes - we're at the end of a convective adjustment step
             // static double prev_total_cloud = -1.0; // Track between iterations, -1 indicates first run
             // // static double prev_total_gas = -1.0;   // Track between iterations
@@ -553,6 +566,10 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // // Store current values for next iteration
             // // prev_total_cloud = curr_total_cloud;
             // // prev_total_gas = curr_total_gas;
+            //UNUSED CODE END
+
+
+
 
             // Add live plotting during convection - plot at every step since there are few convective steps
 #if LIVE_PLOTTING
@@ -568,6 +585,8 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
 #endif
             //printf("%s %d\n", "Convection step count = ", total_step_count);
 
+
+            
             //ms22: check if convective regions were fully addressed:
             deltaconv = 0;
             for (j=1;j<=zbin;j++)

@@ -25,6 +25,9 @@ extern int CONDENSIBLES[];
 // Number of wavelengths in LX-Mie output files (will be determined from first file)
 #define MAX_MIE_WAVELENGTHS 1000
 
+// Maximum number of cloud species supported
+#define MAX_CLOUD_SPECIES 10
+
 // Cloud optical property data structures (LX-Mie format)
 // Format: [particle_size_index][wavelength_index]
 typedef struct {
@@ -37,8 +40,12 @@ typedef struct {
     double asymmetry_g[MAX_PARTICLE_SIZES][MAX_MIE_WAVELENGTHS];       // Asymmetry parameter g
 } CloudOpticalTableMie;
 
-// Global optical property tables (defined in cloud_opticsH.c)
-extern CloudOpticalTableMie H2O_mie_optics;
+// Global optical property tables (defined in cloud_optics.c)
+// Array of optical tables, one per cloud species
+#define MAX_CLOUD_SPECIES 10  // Maximum number of cloud species supported
+extern CloudOpticalTableMie cloud_mie_optics[MAX_CLOUD_SPECIES];  // Array of optical tables for each cloud species
+extern int cloud_species_ids[MAX_CLOUD_SPECIES];  // Array of species IDs corresponding to cloud_mie_optics
+extern int n_cloud_species_loaded;  // Actual number of cloud species loaded
 
 // Function declarations
 void read_cloud_optical_tables_mie(void);

@@ -49,6 +49,7 @@ extern double *qysum;              // PhotoCross quantum yields
 
 // Cloud optical property arrays for radiative transfer [layer][wavelength]
 extern double **cH2O, **aH2O, **gH2O;  // H2O cloud: cross-section (cm^-1), albedo, asymmetry g
+extern double **cNH3, **aNH3, **gNH3;  // NH3 cloud: cross-section (cm^-1), albedo, asymmetry g
 extern double H2H2CIA[zbin+1][NLAMBDA], H2HeCIA[zbin+1][NLAMBDA], H2HCIA[zbin+1][NLAMBDA], N2H2CIA[zbin+1][NLAMBDA], N2N2CIA[zbin+1][NLAMBDA], CO2CO2CIA[zbin+1][NLAMBDA];
 extern double MeanH2H2CIA[], MeanH2HeCIA[], MeanH2HCIA[], MeanN2H2CIA[], MeanN2N2CIA[],MeanCO2CO2CIA[];
 extern double SMeanH2H2CIA[], SMeanH2HeCIA[], SMeanH2HCIA[], SMeanN2H2CIA[], SMeanN2N2CIA[], SMeanCO2CO2CIA[];

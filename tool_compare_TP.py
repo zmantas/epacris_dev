@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # Get all the files in the Results directory
 results_dir = 'Results/K2-18b/'
-cases = ['cloud_test_on_nmax_rc_1', 'cloud_test_off_nmax_rc_1']
+cases = ['cloud_test_on_rad_new_test_10', 'cloud_test_on_rad_new_test_20']
 tp_file_extension = 'NewTemperature.dat'
 
 # Plot the TP profiles
@@ -21,10 +21,10 @@ plt.tick_params(axis='both', direction='in')
 plt.legend()
 plt.xlabel('Temperature (K)')
 plt.ylabel('Pressure (bar)')
-plt.title('Temperature-Pressure Profile 10 RC iterations')
+plt.title('Temperature-Pressure Profile diff')
 plt.yscale('log')
 plt.ylim(1e-8, 1e3)
 plt.gca().invert_yaxis()
 plt.grid(False)
-plt.savefig('TP_profile_v2_test.png')
+plt.savefig('TP_profile_new_test_diff.png')
 #plt.show()

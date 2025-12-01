@@ -10,7 +10,7 @@
 
 
 //--------------------------------------------------------------------- 
-// *** New config paramaters from MZ ***
+// *** New or changed config paramaters from MZ ***
 //--------------------------------------------------------------------- 
 // Opacity species list - used to read opacity files
 #define OPACITY_SPECIES_LIST \
@@ -21,7 +21,7 @@
      "C2H2", "C2H4", "H2CO", "H2O2"
      
 // Opacity file directory
-#define CROSSHEADING		"../Opacity/MayTest/"
+#define CROSSHEADING		"../Opacity/main_opacities/"
 
 // Cloud physics mode
 #define INCLUDE_CLOUD_PHYSICS 1 // 0 = no cloud physics
@@ -37,6 +37,13 @@
 // Print cloud debugging output in terminal
 #define CLOUD_DEBUG 0  // 0 = disable cloud optics debugging output
                        // 1 = enable detailed cloud optics interpolation debugging
+
+// Cloud Mie scattering directory
+#define CLOUD_MIE_DIRECTORY "../Opacity/Clouds/LXMieOuput"  // Base directory for LX-Mie output files
+
+// Cloud species for Mie scattering (comma-separated list of species IDs)
+// Example: 7 for H2O, 9 for NH3, 20 for CO, etc.
+#define CLOUD_SPECIES_LIST 7, 9
 
 
 // Live plotting mode
@@ -90,8 +97,8 @@
 #define TS_SCHEME       1   // 0 = testing
                             // 1 = HELIOS scheme (code but not publication)
 
-#define TWO_STR_SOLVER  1   // 0 = 2stream as in Toon+1989 (by Renyu Hu)
-                            // 1 = 2 stream as in Heng+2018 (by Markus Scheucher)
+#define TWO_STR_SOLVER  1   // 0 = 2 stream as in Toon+1989 (by Renyu Hu)
+                            // 1 = 2 stream as in Heng+2018 (by Markus Scheucher) !!!(check convective layer isolation)!!!
 #define RT_FLUX_SOLVER  4   // 0 = Thomas Algorithm Bottom-Up on Eq sequence 1 (26,25,26,25,...,26,Bnd.Eq.)
                             // 1 = same as 0 but Top-down
                             // 2 = LU Decomposition (ludcmp&lubksb), Eq sequence 1 as above
@@ -132,7 +139,7 @@
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations - Don't need more than 1 with opacity updating */
 #define NMAX_RC     10      /* Maximum Radiative - Convective Iterations, minimum 1 */
 #define NMAX_RT     500     /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      50      /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
+#define NRT_RC      200      /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
