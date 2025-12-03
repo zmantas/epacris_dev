@@ -191,7 +191,6 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 //========================================================    
 //========================================================    
 
-
 		/* printf("%s %f %f %f %f\n", "crossa", crossa[1][i], cross[2][i], sinab[1][i], sinab[2][i]); */
 		//printf("%s\t%f\n","wavelength",wavelength[i]);
 		//printf("%s%d\t%s%d\n","lambda bin ",i," of ",NLAMBDA-1);
@@ -255,24 +254,32 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
             //ws[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]; */
            
             // --- Cloud opacities and albedos ---     
-            // H2O cloud: absorption and scattering
             // cH2O is already multiplied by number density (particles/m³)
             // and is in units of cm^-1 (extinction coefficient), so no need to adjust
             // *** Assymetry factor (g) is below 30 lines below ***
 
-
-            wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i]); //portion is reflected with albedo
-            ws[j] += cH2O[j1][i]*aH2O[j1][i];
+            // ADD SPECIES HERE
+            // Absorption: extinction × (1 - albedo)
+            // H2O
+            wa[j] += cH2O[j1][i]*(1.0-aH2O[j1][i]);
+            // NH3
             wa[j] += cNH3[j1][i]*(1.0-aNH3[j1][i]); //portion is reflected with albedo
+
+            // Scattering: extinction × albedo
+            // H2O
+            ws[j] += cH2O[j1][i]*aH2O[j1][i];
+            // NH3
             ws[j] += cNH3[j1][i]*aNH3[j1][i];
 
-            
 
+            // Calculate single scattering albedo w
             if (ws[j] > 0.0) {
                 w[j]  = ws[j]/(wa[j]+ws[j]);
             } else {
                 w[j]  = 0.0;
             }
+            
+            // Limit w to avoid numerical instability
             if (w[j] > 0.9999999999999) {
                 w[j] = 0.9999999999999;
             }
@@ -286,18 +293,21 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 
         }
 		
+        // Old Marcus Debugging:
         /*printf("%s\n","\n==== w_0 ===="); //template
         for (i=0;i<=zbin;i++)
         {
             printf("%s %d\t%.3e\n","w_0 ",i,w[i]);
         }*/
-                /* Asymmetry Factor */
+
+
+        // Asymmetry Factor
         /* +++ OJO +++++++++++++++++++++++++++++++++++++++++++++++
         * ms_two_str can deal with scattering of larger molecules. 
-        * g0 needs to be calculated consistently (so does ws above)
         *+++ To be addressed ++++++++++++++++++++++++++++++++++++*/
-                tau[0] = 0.0;    //ms2022: just to make sure
-                TAUdoub[0] = 0.0; //ms2023: double grid
+
+        tau[0] = 0.0;    //ms2022: just to make sure
+        TAUdoub[0] = 0.0; //ms2023: double grid
 		for (j=1; j <= zbin; j++) {
 			g[j] = 0.0; 
 			j1   = zbin+1-j;
@@ -306,22 +316,36 @@ void ms_RadTrans(double Rflux[], double tempbnew[], double P[], int ncl, int isc
 			/* g[j] += crossa[1][i]*xx[j1][78]*98.0/mole2dust*sinab[1][i]*asym[1][i];
 			g[j] += crossa[2][i]*xx[j1][111]*256.0/mole2dust*sinab[2][i]*asym[2][i]; */
 
-            // Cloud asymmetry parameter (selected based on CLOUD_SPECIES)
-            // Weighted mean: g = Σ(scattering_opacity × asymmetry) / Σ(scattering_opacity)
+            // Cloud asymmetry g
+            // Weighted mean: g = sum(scattering_opacity × asymmetry) / sum(scattering_opacity)
             // cH2O*aH2O is scattering opacity (cm^-1), gH2O is asymmetry (dimensionless)
 
+
+            // ADD SPECIES HERE
+            // H2O
             g[j] += cH2O[j1][i]*aH2O[j1][i]*gH2O[j1][i];
+            // NH3
             g[j] += cNH3[j1][i]*aNH3[j1][i]*gNH3[j1][i];
-
-
+            
 			if (ws[j] > 0.0) {
 				g[j] = g[j]/ws[j];
 			} else {
 				g[j] = 0.0;
 			}
+
+
+            //Print cH2O, aH2O, gH2O only if g not zero
+            // if (aH2O[j1][i] != 1.0) {
+            //     printf("cH2O[%d][%d] = %f, aH2O[%d][%d] = %f, gH2O[%d][%d] = %f\n", j1, i, cH2O[j1][i], j1, i, aH2O[j1][i], j1, i, gH2O[j1][i]);
+            // }
+
+
+
                         //g[j] = 1.0; //testing pure absorption
 		}
-		
+
+        //Print max and minimum values of g
+        //printf("Max value of g: %f, Min value of g: %f\n", fmax(g[1], g[zbin]), fmin(g[1], g[zbin]));
 		/* Optical Depth of Each Layer */
 		//printf("%s\t%s\t%s\t%s\t%s\t%s\n","j", "wavelength[i]", "tau[j]","TAUdoub[2*j-1]","TAUdoub[2*j]","TAUdoub[sum]"); 
 		//if(i%100==0) printf("%s\t%12s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\t%16s\n","j", "wavelength[i]", "tau[j]","wa[j]","ws[j]","w0[j]","g0[j]","MM[j]","AMU","Meanmol.","GA","P[-1]","P[j]","Tvar[j][0]","solar"); 

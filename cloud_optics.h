@@ -18,12 +18,15 @@
 // Forward declarations - actual definitions in global_temp.h
 extern int CONDENSIBLES[];
 
-// Number of particle size bins in LX-Mie lookup tables (will be determined dynamically)
-// Typical range: ~0.01 to ~1000 microns, log-spaced
-#define MAX_PARTICLE_SIZES 100
+// Number of particle size bins in lookup tables (will be determined dynamically)
+// LX-Mie: Typical range: ~0.01 to ~1000 microns, log-spaced (~100 sizes)
+// EPACRIS: 16000 sizes (0.1 to 1600 microns in 0.1 increments)
+#define MAX_PARTICLE_SIZES 1000
 
-// Number of wavelengths in LX-Mie output files (will be determined from first file)
-#define MAX_MIE_WAVELENGTHS 1000
+// Number of wavelengths in lookup tables
+// LX-Mie: Determined from first file (typically ~1000)
+// EPACRIS: Fixed 1387 wavelengths (0.1 to 100 μm)
+#define MAX_MIE_WAVELENGTHS 2000
 
 // Maximum number of cloud species supported
 #define MAX_CLOUD_SPECIES 10

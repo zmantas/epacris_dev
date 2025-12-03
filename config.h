@@ -15,10 +15,10 @@
 // Opacity species list - used to read opacity files
 #define OPACITY_SPECIES_LIST \
     "H2O", "NH3", "CO2", "CO", "CH4", \
-     "H2S", "N2", "OH", "C2H6", "CH2O2", \
-     "HNO3", "N2O", "SO2", "NO2", "NO", \
-     "O2", "O3", "OCS", "HCN", "HO2", \
-     "C2H2", "C2H4", "H2CO", "H2O2"
+    //  "H2S", "N2", "OH", "C2H6", "CH2O2", \
+    //  "HNO3", "N2O", "SO2", "NO2", "NO", \
+    //  "O2", "O3", "OCS", "HCN", "HO2", \
+    //  "C2H2", "C2H4", "H2CO", "H2O2"
      
 // Opacity file directory
 #define CROSSHEADING		"../Opacity/main_opacities/"
@@ -34,30 +34,34 @@
 // Cold trap, limits the abundance above condensation region
 #define ENABLE_COLD_TRAP  1  // 0 = disabled, 1 = enabled (affects only condensibles)
 
+
 // Print cloud debugging output in terminal
 #define CLOUD_DEBUG 0  // 0 = disable cloud optics debugging output
                        // 1 = enable detailed cloud optics interpolation debugging
 
-// Cloud Mie scattering directory
-#define CLOUD_MIE_DIRECTORY "../Opacity/Clouds/LXMieOuput"  // Base directory for LX-Mie output files
+// Cloud Mie scattering directory, only need one of these
+#define USE_EPACRIS_FORMAT 1  // 0 = use LX-Mie format, 1 = use EPACRIS format
+#define CLOUD_MIE_DIRECTORY_EPACRIS "../Opacity/Clouds/EPACRIS_MIE"  // Base directory for EPACRIS format MIE tables
+#define CLOUD_MIE_DIRECTORY_LXMIE "../Opacity/Clouds/LXMieOuput"  // Base directory for LX-Mie output files
 
 // Cloud species for Mie scattering (comma-separated list of species IDs)
 // Example: 7 for H2O, 9 for NH3, 20 for CO, etc.
 #define CLOUD_SPECIES_LIST 7, 9
 
-
 // Live plotting mode
 #define LIVE_PLOTTING 1  // 0 = disable live plotting,
                          // 1 = enable live plotting
+
+//Debugging: x steps for live plotting the TP evolution (sets to 1 step for matrix solver)
+#define PRINT_ITER  100  
 
 // Temperature variation tolerance in K used for Climate-Chemistry iterations
 // Was hardcoded before, just added it here now if necessary for later
 #define TVARTOTAL_TOL 1.0 // This is unlikely to be trigerred since only 1 Climate-Chemistry iter is necessary
 
-#define PRINT_ITER  100  //Debugging: x steps for live plotting the TP evolution
 
 // Condensation params, choose whether to use manual list or dynamic detection
-#define CONDENSATION_MODE 1  // 0 = Manual (use predefined CONDENSIBLES list)
+#define CONDENSATION_MODE 1 // 0 = Manual (use predefined CONDENSIBLES list)
                             // 1 = Automatic (dynamic species detection based on saturation)
                             // 2 = Hybrid (manual list + automatic validation)
 
@@ -66,8 +70,9 @@
                              // 2 = Detect before loop + every NRT_RC iterations
 // For automatic mode
 #define MAX_CONDENSIBLES 20  // Maximum number of species that could potentially condense
+
 // Automatic condensation detection parameters
-#define SATURATION_THRESHOLD 0.01  // Minimum saturation ratio to consider species condensible
+#define SATURATION_THRESHOLD 0.1  // Minimum saturation ratio to consider species condensible
 
 // Manual condensation only if CONDENSATION_MODE = 0 or 2
 #define NCONDENSIBLES_MANUAL 0  //how many potentially condensing species for manual mode
@@ -82,6 +87,10 @@
                                 // 1 = Realistic (pressure adjusts) (this probably doesnt work)
 // Set the Graham's alpha value. 1 = 100% of condensibles are retained, 0 = 0% of condensibles are retained
 #define ALPHA_RAINOUT 1.0        // Single alpha value for ALL condensible species (fraction retained after rainout)
+
+// Cold trap alpha calculation: track original abundance and calculate alpha relative to original
+#define ENABLE_COLD_TRAP_ALPHA  0  // 0 = disabled (no alpha tracking), 1 = enabled (track original Xtotal and calculate alpha)
+
 //--------------------------------------------------------------------- 
 // *** End of new params from MZ ***
 //--------------------------------------------------------------------- 
@@ -131,6 +140,7 @@
 #define STAR_SPEC   "Library/Star/gj876.txt"
 #define STAR_RADIUS 0.44            // Solar radius
 #define STAR_TEMP   3457            // Star temperature at surface (old version at 1 AU)
+#define FaintSun    0.3				// Faint early Sun factor = (1-albedo)
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
@@ -138,8 +148,8 @@
 //--------------------------------------------------------------------- 
 #define NMAX        1       /* Maximum Climate - Chemistry Iterations - Don't need more than 1 with opacity updating */
 #define NMAX_RC     10      /* Maximum Radiative - Convective Iterations, minimum 1 */
-#define NMAX_RT     500     /* Maximum Radiative Transfer Iterations */
-#define NRT_RC      200      /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
+#define NMAX_RT     100     /* Maximum Radiative Transfer Iterations */
+#define NRT_RC      50      /*RT steps between Convective adjustments after initial RT equilibrium (Helios uses 1 step) */
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
@@ -205,7 +215,7 @@
 //--------------------------------------------------------------------- 
 
 //--------------------------------------------------------------------- 
-// Other params that I have not touched
+// Other params that I have mostly not touched
 //--------------------------------------------------------------------- 
 /* Parameters to be adapted in overal model upgrade */
 #define NSP         115                 /*Number of species in the standard list*/
@@ -220,7 +230,6 @@
 
 
 /* All following parameters are rarely used, set to the default values */
-#define FaintSun    0.3				/* Faint early Sun factor */
 #define OUT_FILE1   "AuxillaryOut/Conx.dat"
 #define OUT_FILE2   "AuxillaryOut/Conf.dat"
 #define IFIMPORTH2O 0		/* When H2O is set to constant, 1=import mixing ratios */

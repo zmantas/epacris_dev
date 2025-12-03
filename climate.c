@@ -494,7 +494,7 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             // Uses global arrays: clouds, particle_r2, particle_r0, particle_VP, particle_mass, wavelength
             // Writes to global arrays: cH2O, aH2O, gH2O, cNH3, aNH3, gNH3
             // Only calculate if cloud physics is enabled (clouds array will be populated)
-            if (INCLUDE_CLOUD_PHYSICS > 0 && cH2O != NULL && aH2O != NULL && gH2O != NULL) {
+            if (INCLUDE_CLOUD_PHYSICS > 0) {
                 calculate_cloud_opacity_arrays();
             }
 
@@ -504,16 +504,16 @@ void ms_Climate(double tempeq[], double P[], double T[], double Tint, char outne
             /* determine convection, and record convective layers */
             ms_conv_check(tempb, P, lapse, isconv, &ncl, &nrl); //ms22: check convective layers
 
-            // Check if single layers are causing issues with spiking
-            //          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
-             // remove single radiative layer between convective layers
-            for (j=2; j<zbin; j++) { //rh->ms 2021
-                    if (isconv[j]==0 && (isconv[j+1]==1 && isconv[j-1]==1)) {
-                        isconv[j]=1;
-                        ncl = ncl+1;
-                        nrl = nrl-1;
-                    }
-                }
+            // // Check if single layers are causing issues with spiking
+            // //          printf("%s %d %s %d\n", "ncl", ncl, "nrl", nrl);
+            //  // remove single radiative layer between convective layers
+            // for (j=2; j<zbin; j++) { //rh->ms 2021
+            //         if (isconv[j]==0 && (isconv[j+1]==1 && isconv[j-1]==1)) {
+            //             isconv[j]=1;
+            //             ncl = ncl+1;
+            //             nrl = nrl-1;
+            //         }
+            //     }
 
         
             // remove single convective layer between radiative layers

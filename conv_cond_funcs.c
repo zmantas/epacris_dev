@@ -10,10 +10,12 @@
 #include "ms_gasheat.h"  // Include gas-phase heat capacity functions
 #include "conv_cond_funcs.h"  // Include function declarations
 
-//=========================================================
-//=== Function Implementations ============================
-// Main function declarations are in conv_cond_funcs.h
-// Helper function forward declarations (needed because they're called before definition):
+//--------------------------------------------------------------------- 
+/* Forward declarations */
+/* Main function declarations are in conv_cond_funcs.h */
+/* Helper function forward declarations (needed because they're called before definition) */
+//--------------------------------------------------------------------- 
+
 double ms_psat_h2o(double temp); //calc saturation pressure of water
 double ms_psat_nh3(double temp);
 double ms_psat_co(double temp);
@@ -27,34 +29,40 @@ double ms_psat_feo2h2(double temp);
 double ms_psat_fes(double temp);
 double ms_latent(int mol, double temp);
 
-// GLOBAL ALPHA STORAGE FOR DYNAMIC CLOUD-THERMODYNAMICS INTEGRATION
-// This stores layer-specific alpha values (NOW ACTIVE - used for layer-dependent retention)
-// ms_adiabat uses these values for physics-based, layer-dependent condensate retention
-static double global_alpha_values[zbin+1][MAX_CONDENSIBLES]; // Will be initialized properly
-static int global_alpha_initialized = 0;
 
-// ORIGINAL CONDENSIBLE ABUNDANCE TRACKING
+
+//--------------------------------------------------------------------- 
+/* Declare variables */
+//--------------------------------------------------------------------- 
+// This stores layer-specific alpha values
+static double global_alpha_values[zbin+1][MAX_CONDENSIBLES];
+static int global_alpha_initialized = 0; // Initialized flag
+
 // Track the original Xtotal values before any cold trapping for proper alpha calculation
 static double original_xtotal_values[zbin+1][MAX_CONDENSIBLES]; // Original abundance before cold trapping
-static int original_xtotal_initialized = 0;
+static int original_xtotal_initialized = 0; // Initialized flag
 
+//--------------------------------------------------------------------- 
+/* Functions */
+//--------------------------------------------------------------------- 
 
-// Function to calculate physics-based alpha values using cold trapping information
+// Initialize alpha values using cold trapping information
 void init_alpha_values() {
-    //printf("DEBUG INIT: Initializing global alpha values to %.6e\n", ALPHA_RAINOUT);
-    // This function should be called after condensation calculations to set alpha based on cold trapping
-    // For now, initialize with default values - will be updated during runtime
+    // This function is called in epacris_main.c and updated during runtime
+
+    // For each layer and condensible species, set alpha to default from config
     for (int layer = 1; layer <= zbin; layer++) {
         for (int i = 0; i < MAX_CONDENSIBLES; i++) {
-            // Start with default, will be modified by cold trapping physics
+
+            // This is later adjusted during runtime
             global_alpha_values[layer][i] = ALPHA_RAINOUT;
         }
     }
+
     global_alpha_initialized = 1; // Mark as initialized
-    //printf("DEBUG INIT: Finished initializing global alpha values\n");
 }
 
-// Initialize original abundance tracking
+// Initialize original xtotal tracking (condensables)
 void init_original_xtotal_tracking() {
     for (int layer = 1; layer <= zbin; layer++) {
         for (int i = 0; i < MAX_CONDENSIBLES; i++) {
@@ -79,11 +87,8 @@ void store_original_xtotal(int layer, int species_index, double xtotal_original)
 }
 
 // Get original Xtotal value
+// Note: Assumes store_original_xtotal() has been called first to initialize the array
 double get_original_xtotal(int layer, int species_index) {
-    if (!original_xtotal_initialized) {
-        init_original_xtotal_tracking();
-    }
-    
     if (layer >= 1 && layer <= zbin && species_index >= 0 && species_index < MAX_CONDENSIBLES) {
         if (original_xtotal_values[layer][species_index] >= 0.0) {
             return original_xtotal_values[layer][species_index];
@@ -214,8 +219,10 @@ void condensation_and_lapse_rate(int lay, double lapse[], double xxHe, double* c
                 // Calculate total available condensible amount. Does not include the dry component
         double Xtotal = Xv[i] + Xc[i];  // Total condensible (gas + cloud)
         
+#if ENABLE_COLD_TRAP_ALPHA
         // TRACK ORIGINAL ABUNDANCE: Store the original Xtotal on first encounter
         store_original_xtotal(lay, i, Xtotal);
+#endif
         
         // +++++++++++++++++++++++++++ Cold Trapping +++++++++++++++++++++++++++
         // COLD TRAP MECHANISM: Apply transport limitation for ALL condensible species
@@ -297,32 +304,33 @@ void condensation_and_lapse_rate(int lay, double lapse[], double xxHe, double* c
         Xd -= Xv[i] + Xc[i];
 
 
-        // Calcuting alpha value, not useful now, maybe later
-        // // CALCULATE ALPHA RELATIVE TO ORIGINAL ABUNDANCE
-        // // Alpha represents the fraction of ORIGINAL material remaining in the atmosphere
-        // double original_xtotal = get_original_xtotal(lay, i);
-        // double alpha_value;
+#if ENABLE_COLD_TRAP_ALPHA
+        // CALCULATE ALPHA RELATIVE TO ORIGINAL ABUNDANCE
+        // Alpha represents the fraction of ORIGINAL material remaining in the atmosphere
+        double original_xtotal = get_original_xtotal(lay, i);
+        double alpha_value;
         
-        // if (original_xtotal > 0.0) {
-        //     // Calculate alpha as fraction of original abundance
-        //     alpha_value = Xtotal / original_xtotal;
+        if (original_xtotal > 0.0) {
+            // Calculate alpha as fraction of original abundance
+            alpha_value = Xtotal / original_xtotal;
             
-        //     // Ensure alpha stays within physical bounds [0, 1]
-        //     if (alpha_value > 1.0) alpha_value = 1.0;  // Can't have more than original
-        //     if (alpha_value < 0.0) alpha_value = 0.0;  // Can't have negative
+            // Ensure alpha stays within physical bounds [0, 1]
+            if (alpha_value > 1.0) alpha_value = 1.0;  // Can't have more than original
+            if (alpha_value < 0.0) alpha_value = 0.0;  // Can't have negative
             
-        //     if (lay > 30 && CONDENSIBLES[i] == 7) {
-        //         printf("Layer %d, Species %d: Original=%.6e, Current=%.6e, Alpha=%.6e\n", 
-        //                lay, CONDENSIBLES[i], original_xtotal, Xtotal, alpha_value);
-        //     }
-        // } else {
-        //     // Fallback if original not stored (shouldn't happen)
-        //     alpha_value = ALPHA_RAINOUT;
-        //     printf("WARNING: No original Xtotal for Layer %d, Species index %d\n", lay, i);
-        // }
+            if (lay > 30 && CONDENSIBLES[i] == 7) {
+                printf("Layer %d, Species %d: Original=%.6e, Current=%.6e, Alpha=%.6e\n", 
+                       lay, CONDENSIBLES[i], original_xtotal, Xtotal, alpha_value);
+            }
+        } else {
+            // Fallback if original not stored (shouldn't happen)
+            alpha_value = ALPHA_RAINOUT;
+            printf("WARNING: No original Xtotal for Layer %d, Species index %d\n", lay, i);
+        }
         
-        // //Store this alpha for layer for species
-        // update_alpha_from_cold_trapping(lay, i, alpha_value);
+        //Store this alpha for layer for species
+        update_alpha_from_cold_trapping(lay, i, alpha_value);
+#endif
 
 
 
@@ -1295,267 +1303,11 @@ void ms_temp_adj(double tempb[],double P[],double lapse[],int isconv[], double c
 
 //atexit(pexit);exit(0); //ms debugging mode
 }//END: void ms_temp_adj()
-//*********************************************************
-//*********************************************************
-//*********************************************************
-//*********************************************************
-
-/**
- * MATHEMATICAL FORMULATION: EXOLYN CLOUD REDISTRIBUTION
- * 
- * This function implements the Exolyn cloud transport equations from:
- * 1. Exolyn/src/functions.py (edif, eadv functions)
- * 2. exoclimes_clouds/exp_vert_diff.py and exp_vert_adv.py
- * 3. Ackerman & Marley (2001) cloud microphysics
- * 
- * === CORE TRANSPORT EQUATION ===
- * The fundamental equation solved is:
- * 
- *   ∂xc/∂t = DIFFUSION + SEDIMENTATION + SOURCE(not used here)
- * 
- * Where xc is the condensed species mixing ratio [dimensionless]
- * 
- * === 1. DIFFUSION TERM (Exolyn edif function) ===
- * From Exolyn/src/functions.py line 271-272:
- * 
- *   edif = ∇ · (pref_dif * ∇xc) / dx²
- *   edif = d/dx(pref_dif * dxc/dx) / dx²
- * 
- * Where the diffusion prefactor is (line 81):
- *   pref_dif = Kzz * ρ_mid * m_gas * g / (k_B * T_mid)
- * 
- * In physical units:
- *   pref_dif = [m²/s] * [kg/m³] * [kg] * [m/s²] / ([J/K] * [K])
- *   pref_dif = [kg·m/(s³)] / [J/K] = [1/s] (using J = kg·m²/s²)
- * 
- * === 2. SEDIMENTATION TERM (Exolyn eadv function) ===
- * From Exolyn/src/functions.py line 274-280:
- * 
- *   eadv = ∇ · (pref_adv * xc) / dx
- *   eadv = d/dx(pref_adv * xc) / dx
- * 
- * Where the advection prefactor is (line 84):
- *   pref_adv = ρ_atm * v_sed * f_sed(f_sed here is only for numerical stability lim(0,1))
- * 
- * In physical units:
- *   pref_adv = [kg/m³] * [m/s] * [dimensionless] = [kg/(m²·s)]
- * 
- * === 3. FINITE DIFFERENCE IMPLEMENTATION ===
- * Following exoclimes_clouds/exp_vert_diff.py approach:
- * 
- * For DIFFUSION (lines 52-56 in exp_vert_diff.py):
- *   flux[k] = ((phi_top[k] - phi_bottom[k]) / dz[k]) / rho[k]
- *   where phi_top[k] = rho_e[k+1] * Kzz_e[k+1] * (xc[k+1] - xc[k]) / dz_m[k]
- *         phi_bottom[k] = rho_e[k] * Kzz_e[k] * (xc[k] - xc[k-1]) / dz_m[k-1]
- * 
- * For SEDIMENTATION (exoclimes_clouds/exp_vert_adv.py):
- *   Uses flux-limiter McCormack scheme for numerical stability
- * 
- * === 4. SIMPLIFIED IMPLEMENTATION IN THIS CODE ===
- * I implemented a simplified version using direct rate equations:
- * 
- * DIFFUSION RATE:
- *   diffusion_coeff = K_zz / (H²)    [1/s]
- *   diffusion_change = diffusion_coeff * (∇²xc)
- *   where ∇²xc ≈ (xc[i+1] - xc[i]) - (xc[i] - xc[i-1])  [finite difference]
- * 
- * SEDIMENTATION RATE:
- *   settling_rate = v_sed / H    [1/s]
- *   settling_loss = -settling_rate * xc[i]
- * 
- * NET RATE:
- *   dxc/dt = diffusion_change + settling_loss
- * 
- * === 5. TIME INTEGRATION ===
- * Simple forward Euler:
- *   xc_new = xc_old + dt * (dxc/dt)
- * 
- * With stability limits:
- *   |change| < 0.1 * xc_old    (prevent overshooting)
- * 
- * === 6. COORDINATE SYSTEM ===
- * - Uses EPACRIS pressure grid: pl[layer] at layer centers
- * - Scale height: H = k_B * T / (m_avg * g)  [m]
- * - Log-pressure coordinate spacing from P[] array
- * 
- * === 7. PARTICLE PHYSICS ===
- * - Settling velocity from particlesizef_local() (Hu+2019 + Ackerman & Marley)
- * - Uses volume-weighted radius r2 for transport
- * - Includes Cunningham slip correction and accommodation effects
- * 
- * === 8. MASS CONSERVATION ===
- * - Enforced exactly: final_total = original_total
- * - Applied as multiplicative scaling factor after transport
- * - Ensures ∑(xc[i] * MM[i]) = constant
- * 
- * === UNITS SUMMARY ===
- * - xc: mixing ratio [dimensionless]
- * - v_sed: settling velocity [m/s]
- * - K_zz: eddy diffusion coefficient [m²/s]
- * - H: scale height [m]
- * - dt: time step [s]
- * - All rates: [1/s]
- */
-
- // DISCARDED CLOUD REDISTRIBUTIONFUNCTION!! DISCARDED FUNCTION !!
-// EXOLYN CLOUD REDISTRIBUTION - SIMPLE AND DIRECT
-// 1. Read condensate amounts from ms_adiabat results
-// 2. Apply Exolyn transport physics to redistribute them
-// 3. Return redistributed condensate values with perfect conservation
-// 4. Calculate and return particle sizes for plotting
-// void apply_exolyn_cloud_redistribution(double gravity, double P[], double **particle_sizes) {
-    
-//     // Use EPACRIS global arrays
-//     extern double zl[]; // Altitude at layer centers in km
-//     extern double pl[]; // Pressure at layer centers in Pa  
-//     extern double tl[]; // Temperature at layer centers in K
-    
-//     //printf("=== APPLYING EXOLYN CLOUD REDISTRIBUTION ===\n");
-    
-
-//     // Convert to SI units
-//     double Kzz_m2s = KZZ * 1.0e-4; // m²/s
-    
-//     // Process each condensible species independently
-//     for (int i = 0; i < NCONDENSIBLES; i++) {
-//         int species_id = CONDENSIBLES[i];
-        
-//         // STEP 1: READ CURRENT CONDENSATE DISTRIBUTION (from ms_adiabat)
-//         double total_original = 0.0;
-//         double xc_original[zbin+1]; // Store original mixing ratios
-        
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             xc_original[layer] = clouds[layer][species_id] / MM[layer]; // mixing ratio
-//             total_original += clouds[layer][species_id]; // total number density
-//         }
-        
-//         // Skip if no condensate
-//         if (total_original < 1.0e-20) {
-//             // Set particle sizes to zero for this species (for debug plotting)
-//             for (int layer = 1; layer <= zbin; layer++) {
-//                 particle_sizes[layer][i] = 0.0;
-//             }
-//             continue;
-//         }
-        
-//         printf("Redistributing species %d: total = %.2e molecules/cm³\n", species_id, total_original);
-        
-//         // STEP 2: CALCULATE EXOLYN REDISTRIBUTION
-//         double xc_new[zbin+1]; // New distribution
-        
-//         // Copy original as starting point
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             xc_new[layer] = xc_original[layer];
-//         }
-        
-//         // Apply Exolyn transport for multiple small time steps
-//         double dt = 1000.0; // seconds
-//         int n_steps = 10;
-        
-//         for (int step = 0; step < n_steps; step++) {
-            
-//             // Calculate transport for each layer
-//             for (int layer = 2; layer < zbin; layer++) {
-                
-//                 if (xc_new[layer] < 1.0e-20) continue;
-                
-//                 // Get particle settling velocity from particlesizef_local
-//                 double deltaP = 1.0e-12; // Small positive value for numerical stability
-//                 double r0, r1, r2, VP, v_sed_ms, scale_height;
-                
-//                 particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
-//                                   species_id, Kzz_m2s, deltaP, layer,
-//                                   &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
-                
-//                 // SEDIMENTATION: material falls down
-//                 double settling_rate = v_sed_ms / scale_height; // 1/s
-                
-//                 // DIFFUSION: material spreads out
-//                 double diffusion_coeff = Kzz_m2s / (scale_height * scale_height); // 1/s
-                
-//                 // Calculate concentration gradients
-//                 double grad_up = (layer < zbin) ? (xc_new[layer+1] - xc_new[layer]) : 0.0;
-//                 double grad_down = (layer > 1) ? (xc_new[layer] - xc_new[layer-1]) : 0.0;
-                
-//                 // Net change rate
-//                 double settling_loss = -settling_rate * xc_new[layer]; // loses material downward
-//                 double diffusion_change = diffusion_coeff * (grad_up - grad_down); // smooths gradients
-                
-//                 double net_change_rate = settling_loss + diffusion_change;
-                
-//                 // Apply small time step
-//                 double change = net_change_rate * dt;
-                
-//                 // Limit change to prevent numerical instability
-//                 if (change < -0.1 * xc_new[layer]) change = -0.1 * xc_new[layer];
-//                 if (change > 0.1 * xc_new[layer]) change = 0.1 * xc_new[layer];
-                
-//                 xc_new[layer] += change;
-                
-//                 // Enforce positivity
-//                 if (xc_new[layer] < 0.0) xc_new[layer] = 0.0;
-//             }
-//         }
-        
-//         // STEP 3: ENFORCE PERFECT MASS CONSERVATION
-//         double total_new = 0.0;
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             total_new += xc_new[layer] * MM[layer];
-//         }
-        
-//         // Scale to conserve exactly
-//         if (total_new > 1.0e-30) {
-//             double conservation_factor = total_original / total_new;
-            
-//             for (int layer = 1; layer <= zbin; layer++) {
-//                 xc_new[layer] *= conservation_factor;
-//             }
-            
-//             printf("  Conservation factor: %.6f\n", conservation_factor);
-//         }
-        
-//         // STEP 4: UPDATE CLOUD ARRAYS WITH REDISTRIBUTED VALUES
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             clouds[layer][species_id] = xc_new[layer] * MM[layer];
-//         }
-        
-//         // STEP 5: CALCULATE PARTICLE SIZES FOR PLOTTING
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             if (clouds[layer][species_id] > 1.0e-20) {
-//                 // Calculate particle size using current cloud amount
-//                 double deltaP = 1.0e-12; // Small positive value for numerical stability
-//                 double r0, r1, r2, VP, v_sed_ms, scale_height;
-                
-//                 particlesizef_local(gravity, tl[layer], pl[layer], meanmolecular[layer], 
-//                                   species_id, Kzz_m2s, deltaP, layer,
-//                                   &r0, &r1, &r2, &VP, &v_sed_ms, &scale_height);
-                
-//                 // Store volume-weighted radius (r2) in micrometers for plotting
-//                 particle_sizes[layer][i] = r2;
-//             } else {
-//                 // No condensate - zero particle size
-//                 particle_sizes[layer][i] = 0.0;
-//             }
-//         }
-        
-//         // Verify conservation
-//         double final_total = 0.0;
-//         for (int layer = 1; layer <= zbin; layer++) {
-//             final_total += clouds[layer][species_id];
-//         }
-        
-//         double conservation_error = fabs(final_total - total_original) / total_original;
-//         printf("  Final total: %.2e, Conservation error: %.2e%%\n", 
-//                final_total, conservation_error * 100.0);
-//     }
-    
-//     //printf("=== CLOUD REDISTRIBUTION COMPLETE ===\n");
-// }
 
 
-//=========================================================
-//=== Dynamic Condensation Detection Functions ===========
-
+//--------------------------------------------------------------------- 
+/* Dynamic Condensation Detection Functions */
+//--------------------------------------------------------------------- 
 void initialize_condensibles_mode() {
     // Initialize condensibles based on CONDENSATION_MODE
     

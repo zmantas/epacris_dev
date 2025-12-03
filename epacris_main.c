@@ -1041,11 +1041,14 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
                 cH2O[j][ii] = 0.0;
                 aH2O[j][ii] = 1.0;
                 gH2O[j][ii] = 0.0;
+
                 cNH3[j][ii] = 0.0;
                 aNH3[j][ii] = 1.0;
                 gNH3[j][ii] = 0.0;
             }
         }
+
+
         printf("%s\n", "Cloud and cloud opacity arrays reset for new iteration");
         
 
@@ -1153,7 +1156,6 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     /* Clean up */
     cleanup_opacity_cache();  // Add this line before other cleanup
     cleanup_cia_cache();      // Clean up CIA opacity cache
-    cleanup_cloud_optical_tables_mie();  // Clean up cloud optical tables
     
     free_dmatrix(opacCO2,1,zbin,0,NLAMBDA-1);
     free_dmatrix(opacO2,1,zbin,0,NLAMBDA-1);
@@ -1183,6 +1185,9 @@ int main(int argc, char *argv[]) //ms2022: getting rid of warnings
     free_dmatrix(cH2O,1,zbin,0,NLAMBDA-1);
     free_dmatrix(aH2O,1,zbin,0,NLAMBDA-1);
     free_dmatrix(gH2O,1,zbin,0,NLAMBDA-1);
+    free_dmatrix(cNH3,1,zbin,0,NLAMBDA-1);
+    free_dmatrix(aNH3,1,zbin,0,NLAMBDA-1);
+    free_dmatrix(gNH3,1,zbin,0,NLAMBDA-1);
 
     /* Clean up */
     free_dmatrix(cross,1,nump,0,NLAMBDA-1);

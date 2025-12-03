@@ -137,11 +137,355 @@ static int read_mie_file(const char *filepath, double *wavelengths,
 }
 
 /**
+ * Generate EPACRIS wavelength grid
+ * w(0) = 0.1 μm
+ * w(i) = w(i-1) * (1+1/200) for i=1 to 1386
+ * Total: 1387 wavelengths (approximately 0.1 to 100 μm)
+ * 
+ * Note: This formula gives w(1386) ≈ 100.499 μm, not exactly 100 μm.
+ * This matches the EPACRIS file format specification.
+ */
+static void generate_epacris_wavelength_grid(double *wavelength, int n_wavelengths) {
+    wavelength[0] = 0.1;  // w(0) = 0.1 μm
+    for (int i = 1; i < n_wavelengths; i++) {
+
+        wavelength[i] = wavelength[i-1] * (1.0 + 1.0/200.0);  // Constant resolution: 1+1/200
+    }
+}
+
+/**
+ * Read EPACRIS format MIE table file (Albedo, Cross, or Geo)
+ * 
+ * File format:
+ * - First column: particle radius (log-spaced, starting at 0.01)
+ * - Remaining columns: wavelength-dependent values (1387 columns)
+ * - No header line
+ * 
+ * @param filepath Path to the file
+ * @param data Output array [n_particle_sizes][n_wavelengths] to store values
+ * @param radius_out Output array [n_particle_sizes] to store radii from first column
+ * @param n_particle_sizes Number of particle sizes (rows) - will be determined from file
+ * @param n_wavelengths Number of wavelengths (columns - 1, since first column is radius)
+ * @return Number of particle sizes read on success, -1 on error
+ */
+static int read_epacris_mie_file(const char *filepath, double **data, double *radius_out, 
+                                 int max_particle_sizes, int n_wavelengths) {
+    FILE *fp = fopen(filepath, "r");
+    if (fp == NULL) {
+        printf("ERROR: Cannot open EPACRIS MIE file: %s\n", filepath);
+        return -1;
+    }
+    
+    // Buffer needs to be large enough for 1388 columns (1 radius + 1387 wavelengths)
+    // Each value can be up to ~15 characters (e.g., "1.234567e-10"), plus spaces
+    // 1388 * 20 = ~27760 bytes, use 32KB to be safe
+    char line[32768];
+    int row = 0;
+    
+    while (fgets(line, sizeof(line), fp) != NULL && row < max_particle_sizes) {
+        // Check if line was truncated (fgets doesn't include newline if buffer is full)
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] != '\n' && !feof(fp)) {
+            printf("WARNING: Line %d in %s was truncated (buffer too small)\n", row+1, filepath);
+        }
+        
+        // Parse the line: first value is radius, rest are wavelength values
+        char *token = strtok(line, " \t\n");
+        if (token == NULL) continue;
+        
+        // Read radius from first column
+        radius_out[row] = atof(token);
+        
+        // Read wavelength values (columns 1 to n_wavelengths)
+        int col = 0;
+        token = strtok(NULL, " \t\n");  // Start reading from second column
+        
+        while (token != NULL && col < n_wavelengths) {
+            data[row][col] = atof(token);
+            col++;
+            token = strtok(NULL, " \t\n");
+        }
+        
+        if (col != n_wavelengths) {
+            printf("WARNING: Row %d in %s has %d wavelength columns (expected %d)\n", 
+                   row+1, filepath, col, n_wavelengths);
+        }
+        
+        row++;
+    }
+    
+    fclose(fp);
+    
+    if (row == 0) {
+        printf("ERROR: No data read from %s\n", filepath);
+        return -1;
+    }
+    
+    return row;  // Return actual number of particle sizes read
+}
+
+/**
+ * Read EPACRIS format cloud optical tables for a single species
+ * 
+ * Reads 3 files: Albedo.dat, Cross.dat, Geo.dat
+ * File naming convention: Just Albedo.dat, Cross.dat, Geo.dat (no species prefix)
+ * Directory structure: CLOUD_MIE_DIRECTORY_EPACRIS/SPECIES_NAME/ (e.g., EPACRIS_MIE/H2O/)
+ * 
+ * @param species_id Species ID (e.g., 7 for H2O)
+ * @param species_name Species name (e.g., "H2O" or "NH3")
+ * @param directory Directory containing the files (e.g., "EPACRIS_MIE/H2O")
+ * @param optics Output structure to populate
+ * @return 0 on success, -1 on error
+ */
+static int read_epacris_species_tables(int species_id, const char *species_name, 
+                                       const char *directory, CloudOpticalTableMie *optics) {
+    // EPACRIS format constants
+    const int EPACRIS_N_WAVELENGTHS = 1387;
+    
+    if (EPACRIS_N_WAVELENGTHS > MAX_MIE_WAVELENGTHS) {
+        printf("ERROR: EPACRIS format requires %d wavelengths, but MAX_MIE_WAVELENGTHS = %d\n",
+               EPACRIS_N_WAVELENGTHS, MAX_MIE_WAVELENGTHS);
+        return -1;
+    }
+    
+    // Build file paths - files are just Albedo.dat, Cross.dat, Geo.dat
+    char actual_albedo[1024], actual_cross[1024], actual_geo[1024];
+    snprintf(actual_albedo, sizeof(actual_albedo), "%s/Albedo.dat", directory);
+    snprintf(actual_cross, sizeof(actual_cross), "%s/Cross.dat", directory);
+    snprintf(actual_geo, sizeof(actual_geo), "%s/Geo.dat", directory);
+    
+    // Check if files exist
+    FILE *test_file = fopen(actual_albedo, "r");
+    if (test_file == NULL) {
+        printf("ERROR: Cannot open EPACRIS Albedo file: %s\n", actual_albedo);
+        return -1;
+    }
+    fclose(test_file);
+    
+    test_file = fopen(actual_cross, "r");
+    if (test_file == NULL) {
+        printf("ERROR: Cannot open EPACRIS Cross file: %s\n", actual_cross);
+        return -1;
+    }
+    fclose(test_file);
+    
+    test_file = fopen(actual_geo, "r");
+    if (test_file == NULL) {
+        printf("ERROR: Cannot open EPACRIS Geo file: %s\n", actual_geo);
+        return -1;
+    }
+    fclose(test_file);
+    
+    printf("Found EPACRIS files:\n");
+    printf("  Albedo: %s\n", actual_albedo);
+    printf("  Cross: %s\n", actual_cross);
+    printf("  Geo: %s\n", actual_geo);
+    
+    // Initialize wavelength grid first (needed for reading)
+    optics->n_wavelengths = EPACRIS_N_WAVELENGTHS;
+    generate_epacris_wavelength_grid(optics->wavelength, optics->n_wavelengths);
+    
+    // Allocate temporary arrays for reading (use MAX_PARTICLE_SIZES as upper bound)
+    double **albedo_data = NULL;
+    double **cross_data = NULL;
+    double **geo_data = NULL;
+    double *radius_temp = NULL;
+    
+    albedo_data = (double **)malloc(MAX_PARTICLE_SIZES * sizeof(double *));
+    cross_data = (double **)malloc(MAX_PARTICLE_SIZES * sizeof(double *));
+    geo_data = (double **)malloc(MAX_PARTICLE_SIZES * sizeof(double *));
+    radius_temp = (double *)malloc(MAX_PARTICLE_SIZES * sizeof(double));
+    
+    if (albedo_data == NULL || cross_data == NULL || geo_data == NULL || radius_temp == NULL) {
+        printf("ERROR: Memory allocation failed\n");
+        goto cleanup_error;
+    }
+    
+    for (int i = 0; i < MAX_PARTICLE_SIZES; i++) {
+        albedo_data[i] = (double *)malloc(optics->n_wavelengths * sizeof(double));
+        cross_data[i] = (double *)malloc(optics->n_wavelengths * sizeof(double));
+        geo_data[i] = (double *)malloc(optics->n_wavelengths * sizeof(double));
+    }
+    
+    // Read the three files - they will determine the actual number of particle sizes
+    int n_particle_sizes_albedo = read_epacris_mie_file(actual_albedo, albedo_data, radius_temp, 
+                                                        MAX_PARTICLE_SIZES, optics->n_wavelengths);
+    if (n_particle_sizes_albedo < 0) {
+        printf("ERROR: Failed to read Albedo file\n");
+        goto cleanup_error;
+    }
+    
+    int n_particle_sizes_cross = read_epacris_mie_file(actual_cross, cross_data, radius_temp, 
+                                                        MAX_PARTICLE_SIZES, optics->n_wavelengths);
+    if (n_particle_sizes_cross < 0) {
+        printf("ERROR: Failed to read Cross file\n");
+        goto cleanup_error;
+    }
+    
+    int n_particle_sizes_geo = read_epacris_mie_file(actual_geo, geo_data, radius_temp, 
+                                                     MAX_PARTICLE_SIZES, optics->n_wavelengths);
+    if (n_particle_sizes_geo < 0) {
+        printf("ERROR: Failed to read Geo file\n");
+        goto cleanup_error;
+    }
+    
+    // Verify all files have the same number of particle sizes
+    if (n_particle_sizes_albedo != n_particle_sizes_cross || 
+        n_particle_sizes_albedo != n_particle_sizes_geo) {
+        printf("ERROR: Mismatch in particle size counts: Albedo=%d, Cross=%d, Geo=%d\n",
+               n_particle_sizes_albedo, n_particle_sizes_cross, n_particle_sizes_geo);
+        goto cleanup_error;
+    }
+    
+    // Set the actual number of particle sizes
+    optics->n_particle_sizes = n_particle_sizes_albedo;
+    
+    // Copy radii from first file (they should be the same in all files)
+    for (int i = 0; i < optics->n_particle_sizes; i++) {
+        optics->radius[i] = radius_temp[i];
+    }
+    
+    free(radius_temp);
+    
+    // Convert EPACRIS format to CloudOpticalTableMie structure
+    // Cross file contains extinction cross section (cm²)
+    // Albedo file contains single scattering albedo
+    // Geo file contains asymmetry parameter g
+    for (int i = 0; i < optics->n_particle_sizes; i++) {
+        for (int j = 0; j < optics->n_wavelengths; j++) {
+            optics->extinction_cross[i][j] = cross_data[i][j];
+            optics->albedo[i][j] = albedo_data[i][j];
+            optics->asymmetry_g[i][j] = geo_data[i][j];
+        }
+    }
+    
+    // Free temporary arrays
+    for (int i = 0; i < optics->n_particle_sizes; i++) {
+        free(albedo_data[i]);
+        free(cross_data[i]);
+        free(geo_data[i]);
+    }
+    free(albedo_data);
+    free(cross_data);
+    free(geo_data);
+    
+    printf("Successfully loaded EPACRIS format tables:\n");
+    printf("  Particle sizes: %d (%.6f - %.6f μm)\n", 
+           optics->n_particle_sizes, 
+           optics->radius[0], 
+           optics->radius[optics->n_particle_sizes-1]);
+    printf("  Wavelengths: %d (%.6f - %.6f μm)\n",
+           optics->n_wavelengths,
+           optics->wavelength[0],
+           optics->wavelength[optics->n_wavelengths-1]);
+    
+    return 0;
+    
+cleanup_error:
+    // Free temporary arrays on error
+    if (albedo_data != NULL) {
+        for (int i = 0; i < MAX_PARTICLE_SIZES; i++) {
+            if (albedo_data[i] != NULL) free(albedo_data[i]);
+            if (cross_data[i] != NULL) free(cross_data[i]);
+            if (geo_data[i] != NULL) free(geo_data[i]);
+        }
+        free(albedo_data);
+        free(cross_data);
+        free(geo_data);
+    }
+    if (radius_temp != NULL) {
+        free(radius_temp);
+    }
+    return -1;
+}
+
+/**
+ * Read all EPACRIS format cloud optical tables for cloud species (defined in config.h)
+ * Reads Albedo_*.dat, Cross_*.dat, Geo_*.dat files for each species
+ */
+static void read_cloud_optical_tables_epacris(void) {
+    printf("=======================================================\n");
+    printf("READING CLOUD OPTICAL PROPERTY TABLES (EPACRIS FORMAT)\n");
+    printf("=======================================================\n");
+    
+    // Initialize counter
+    n_cloud_species_loaded = 0;
+    
+    // Build the cloud species list from CLOUD_SPECIES_LIST macro
+    static const int cloud_species_list[] = {CLOUD_SPECIES_LIST};
+    const int n_cloud_species = sizeof(cloud_species_list) / sizeof(cloud_species_list[0]);
+    
+    // Loop through all cloud species
+    for (int species_idx = 0; species_idx < n_cloud_species && species_idx < MAX_CLOUD_SPECIES; species_idx++) {
+        int species_id = cloud_species_list[species_idx];
+        
+        // Get species name from ID
+        const char *species_name = get_species_name(species_id);
+        if (strcmp(species_name, "Unknown") == 0) {
+            printf("WARNING: CLOUD_SPECIES[%d] (%d) is not a recognized species ID. Skipping.\n", species_idx, species_id);
+            continue;
+        }
+        
+        printf("\n--- Processing cloud species %d/%d: %s (ID: %d) ---\n", 
+               species_idx + 1, n_cloud_species, species_name, species_id);
+        
+        // Build directory path: CLOUD_MIE_DIRECTORY_EPACRIS/SPECIES_NAME
+        // Files are in subdirectories like EPACRIS_MIE/H2O/, EPACRIS_MIE/NH3/
+        char directory[1024];
+        snprintf(directory, sizeof(directory), "%s/%s", CLOUD_MIE_DIRECTORY_EPACRIS, species_name);
+        
+        printf("Reading cloud optical tables for species: %s (ID: %d)\n", species_name, species_id);
+        printf("Directory: %s\n", directory);
+        
+        // Initialize structure for this species
+        CloudOpticalTableMie *optics = &cloud_mie_optics[n_cloud_species_loaded];
+        cloud_species_ids[n_cloud_species_loaded] = species_id;
+        
+        // Files are named Albedo.dat, Cross.dat, Geo.dat (no species prefix)
+        // Pass species_name as-is (e.g., "H2O", "NH3") - it's only used for error messages
+        if (read_epacris_species_tables(species_id, species_name, directory, optics) != 0) {
+            printf("ERROR: Failed to load EPACRIS tables for %s. Skipping.\n", species_name);
+            continue;
+        }
+        
+        // Increment counter for successfully loaded species
+        n_cloud_species_loaded++;
+        printf("Successfully loaded optical tables for %s\n", species_name);
+    }
+    
+    printf("\n=======================================================\n");
+    printf("Loaded optical tables for %d cloud species\n", n_cloud_species_loaded);
+    printf("=======================================================\n");
+    
+    // Print summary for each loaded species
+    for (int i = 0; i < n_cloud_species_loaded; i++) {
+        const char *species_name = get_species_name(cloud_species_ids[i]);
+        CloudOpticalTableMie *optics = &cloud_mie_optics[i];
+        printf("\nSpecies %d: %s (ID: %d)\n", i+1, species_name, cloud_species_ids[i]);
+        printf("  Particle size range: %.6f - %.6f micrometers\n", 
+               optics->radius[0], 
+               optics->radius[optics->n_particle_sizes-1]);
+        printf("  Number of particle sizes: %d\n", optics->n_particle_sizes);
+        printf("  Number of wavelengths: %d\n", optics->n_wavelengths);
+        printf("  Wavelength range: %.6f - %.6f micrometers\n",
+               optics->wavelength[0],
+               optics->wavelength[optics->n_wavelengths-1]);
+    }
+    printf("=======================================================\n");
+}
+
+/**
  * Read all LX-Mie output files for cloud species (defined in config.h)
  * Scans directory, finds all r*.dat files, sorts by particle radius, reads them
  * Now supports multiple cloud species
  */
 void read_cloud_optical_tables_mie(void) {
+    // Check which format to use
+    #if USE_EPACRIS_FORMAT
+        read_cloud_optical_tables_epacris();
+        return;
+    #endif
+    
     printf("=======================================================\n");
     printf("READING CLOUD OPTICAL PROPERTY TABLES (LX-MIE FORMAT)\n");
     printf("=======================================================\n");
@@ -168,16 +512,11 @@ void read_cloud_optical_tables_mie(void) {
         printf("\n--- Processing cloud species %d/%d: %s (ID: %d) ---\n", 
                species_idx + 1, n_cloud_species, species_name, species_id);
         
-        // Build directory path: CLOUD_MIE_DIRECTORY/SPECIES_NAME_s
+        // Build directory path: CLOUD_MIE_DIRECTORY_LXMIE/SPECIES_NAME
         char directory[512];
-
-        // If species name is H2O, add _s to the end due to LX-Mie output format
         // Adapt this for every species that has suffixes or prefixes to regular species names
-        if (strcmp(species_name, "H2O") == 0) {
-            snprintf(directory, sizeof(directory), "%s/%s_s", CLOUD_MIE_DIRECTORY, species_name);
-        } else {
-            snprintf(directory, sizeof(directory), "%s/%s", CLOUD_MIE_DIRECTORY, species_name);
-        }
+        snprintf(directory, sizeof(directory), "%s/%s", CLOUD_MIE_DIRECTORY_LXMIE, species_name);
+        
         
         printf("Reading cloud optical tables for species: %s (ID: %d)\n", species_name, species_id);
         printf("Directory: %s\n", directory);
@@ -332,13 +671,6 @@ void read_cloud_optical_tables_mie(void) {
     printf("=======================================================\n");
 }
 
-/**
- * Cleanup function (if needed for future memory management)
- */
-void cleanup_cloud_optical_tables_mie(void) {
-    // No dynamic memory to free currently
-    // This function is provided for future extension
-}
 
 /**
  * Linear interpolation in log-space (for particle size interpolation)
@@ -466,9 +798,7 @@ void calculate_cloud_opacity_arrays(void) {
     // All arrays accessed as globals:
     // Inputs: clouds, particle_r2, particle_r0, particle_VP, particle_mass, wavelength
     // Outputs: cH2O, aH2O, gH2O, cNH3, aNH3, gNH3
-    
-    const double sig = 2.0;  // Lognormal distribution width parameter (unused but kept for compatibility)
-    
+        
     // Loop through all loaded cloud species
     for (int species_table_idx = 0; species_table_idx < n_cloud_species_loaded; species_table_idx++) {
         int cloud_species_id = cloud_species_ids[species_table_idx];
