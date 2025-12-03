@@ -15,10 +15,10 @@
 // Opacity species list - used to read opacity files
 #define OPACITY_SPECIES_LIST \
     "H2O", "NH3", "CO2", "CO", "CH4", \
-    //  "H2S", "N2", "OH", "C2H6", "CH2O2", \
-    //  "HNO3", "N2O", "SO2", "NO2", "NO", \
-    //  "O2", "O3", "OCS", "HCN", "HO2", \
-    //  "C2H2", "C2H4", "H2CO", "H2O2"
+     "H2S", "N2", "OH", "C2H6", "CH2O2", \
+     "HNO3", "N2O", "SO2", "NO2", "NO", \
+     "O2", "O3", "OCS", "HCN", "HO2", \
+     "C2H2", "C2H4", "H2CO", "H2O2"
      
 // Opacity file directory
 #define CROSSHEADING		"../Opacity/main_opacities/"
