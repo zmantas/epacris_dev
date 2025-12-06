@@ -34,7 +34,7 @@
 // Print cloud debugging output in terminal
 #define CLOUD_DEBUG_MIE 0  // 0 = disable cloud optics debugging output
                        // 1 = enable detailed cloud optics interpolation debugging
-#define CLOUD_DEBUG_RT 0  // 0 = disable cloud albedo diagnostics in radiative transfer
+#define CLOUD_DEBUG_RT 1  // 0 = disable cloud albedo diagnostics in radiative transfer
                        // 1 = enable cloud albedo summary output during RT calculations
 
 // Cold trap, limits the abundance above condensation region
