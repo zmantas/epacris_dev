@@ -35,10 +35,10 @@ static CIAFile cia_files[MAX_CIA_FILES] = {
 };
 
 // Function prototypes
-void readcia();
-void reinterpolate_cia();
-void cleanup_cia_cache();
-void reinterpolate_all_cia_opacities();
+void readcia(void);
+void reinterpolate_cia(void);
+void cleanup_cia_cache(void);
+void reinterpolate_all_cia_opacities(void);
 
 // Helper function to get a CIA file by pair name
 static CIAFile* get_cia_file(const char* pair_name) {
@@ -53,7 +53,7 @@ static CIAFile* get_cia_file(const char* pair_name) {
 
 
 // Main function to read CIA data
-void readcia() {
+void readcia(void) {
 	int i, j, s, nl;
 	FILE *fim, *fout;
 	char *temp1;
@@ -536,7 +536,7 @@ void readcia() {
 }
 
 // Reinterpolate CIA opacities for new temperature profile
-void reinterpolate_cia() {
+void reinterpolate_cia(void) {
 	int i, j;
 	double temp[20] = {100.0,200.0,300.0,400.0,500.0,600.0,700.0,800.0,900.0,1000.0,
 					1100.0,1200.0,1300.0,1400.0,1500.0,1600.0,1700.0,1800.0,1900.0,2000.0};
@@ -662,7 +662,7 @@ void reinterpolate_cia() {
 }
 
 // Clean up allocated memory
-void cleanup_cia_cache() {
+void cleanup_cia_cache(void) {
 	printf("Cleaning up CIA opacity cache...\n");
 	
 	CIAFile* h2h2_file = get_cia_file("H2-H2");
@@ -723,7 +723,7 @@ void cleanup_cia_cache() {
 }
 
 // Implementation for reinterpolate_all_cia_opacities
-void reinterpolate_all_cia_opacities() {
+void reinterpolate_all_cia_opacities(void) {
 	reinterpolate_cia();
 }
 

@@ -18,6 +18,7 @@ Based on methods of White, Johnson & Dantzig 1958; and code of Eliza Miller-Ricc
 #include "nrutil.h"
 #include "chem_start.c"
 #include "chem_equil.c"
+#include "config.h"
 
 /* --- Global variables ------------------------------------------ */
 

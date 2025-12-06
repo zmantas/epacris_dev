@@ -33,9 +33,9 @@ extern const int NUM_SPECIES;  // Number of opacity species
 // Function prototypes
 void readcross(char Fname[], double **xsc);
 void reinterpolate_opacities_by_file(double **xsc, char Fname[]);
-void read_all_opacities();
+void read_all_opacities(void);
 void cleanup_opacity_cache(void);
-void reinterpolate_all_opacities();
+void reinterpolate_all_opacities(void);
 // Forward declaration for Interpolation2D (defined in Interpolation.c)
 double Interpolation2D(double x, double y, double xx[], int nx, double yy[], int ny, double **data);
 
@@ -125,7 +125,7 @@ static double** get_opacity_array(const char *species_name) {
 }
 
 // Read all opacities from the species list
-void read_all_opacities() {
+void read_all_opacities(void) {
 	char crossfile[1024];
 	double **opac_ptr;
 
@@ -165,7 +165,7 @@ void cleanup_opacity_cache(void) {
 
 // Function to reinterpolate all opacities
 // Called every 10 RT steps to reinterpolate opacities as T/P change
-void reinterpolate_all_opacities() {
+void reinterpolate_all_opacities(void) {
 	char crossfile[1024];
 	double **opac_ptr;
 

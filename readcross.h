@@ -8,12 +8,12 @@
 #define READCROSS_H
 
 // Opacity reinterpolation functions
-extern void reinterpolate_all_opacities();
+extern void reinterpolate_all_opacities(void);
 extern void cleanup_opacity_cache(void);
 
 // Main opacity reading function
 void readcross(char Fname[], double **xsc);
-void read_all_opacities();
+void read_all_opacities(void);
 
 #endif // READCROSS_H
 

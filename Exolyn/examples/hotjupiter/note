@@ -1,5 +1,0 @@
--put parameters.txt here and then run with
-
-python3 ../../src/relaxation.py
-
-or (better) after putting relaxation.py in the path...

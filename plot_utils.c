@@ -1,5 +1,6 @@
 #include "plot_utils.h"
 #include <math.h>
+#include <stdlib.h>
 
 void write_live_plot_data(int total_step_count, char *live_plot_dir,
                          double *tempb, double *P, char *diagnostic_header,
@@ -7,7 +8,7 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
                          double *cp_array, double *lapse_array, int *isconv_array, double **saturation_ratio_array,
                          double *pot_temp_array, int nmax_iteration, double (*particle_number_density)[MAX_CONDENSIBLES]) {
     
-    FILE *temp_data = fopen("plot_scripts/temp_data.txt", "w");
+    FILE *temp_data = fopen("Tools/temp_data.txt", "w");
     
     // Write header with all species numbers, cloud counterparts, heat capacity, lapse rate, potential temperature, saturation ratios, and particle sizes
     fprintf(temp_data, "# Temperature Pressure");
@@ -90,8 +91,8 @@ void write_live_plot_data(int total_step_count, char *live_plot_dir,
     }
     fclose(temp_data);
     
-    // Execute Python script with step count and NMAX iteration arguments
+    // Execute Python script with step count, NMAX iteration, and species list arguments
     char python_command[2048];
-    sprintf(python_command, "python3 plot_scripts/live_plot.py %d %s %d", total_step_count, live_plot_dir, nmax_iteration);
+    sprintf(python_command, "python3 Tools/live_plot.py %d %s %d %s", total_step_count, live_plot_dir, nmax_iteration, SPECIES_LIST);
     system(python_command);
 } 
